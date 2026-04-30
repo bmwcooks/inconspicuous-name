@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internal PSA Pop Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1A365D; /* Matches your Google Sheet header */
+            text-align: center;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #eef2f5;
+            border-radius: 6px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        select, input[type="file"], button {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #1A365D;
+            color: white;
+            cursor: pointer;
+            border: none;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #2c5282;
+        }
+        .chart-container {
+            position: relative;
+            height: 50vh;
+            width: 100%;
+        }
+        #warning {
+            color: #d9534f;
+            font-size: 12px;
+            text-align: center;
+            margin-top: -10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Internal Population Tracker</h1>
+    <p id="warning">CLIENT-SIDE ONLY. DO NOT UPLOAD CSV FILES TO GITHUB.</p>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="csvFileInput"><strong>1. Load Data:</strong></label>
+            <input type="file" id="csvFileInput" accept=".csv" />
+        </div>
+        
+        <div class="control-group">
+            <label for="cardSelector"><strong>2. Select Card:</strong></label>
+            <select id="cardSelector" disabled>
+                <option value="">Upload CSV first...</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label><strong>3. Timeframe:</strong></label>
+            <button onclick="updateChart(7)">Last 7 Days</button>
+            <button onclick="updateChart(30)">Last 30 Days</button>
+            <button onclick="updateChart(0)">All Time</button>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="popChart"></canvas>
+    </div>
+</div>
+
+<script>
+    let rawData = [];
+    let myChart = null;
+    let currentCardDetails = "";
+
+    // 1. Handle File Upload via PapaParse
+    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                rawData = results.data;
+                populateDropdown();
+            }
+        });
+    });
+
+    // 2. Populate Dropdown with Unique Cards
+    function populateDropdown() {
+        const selector = document.getElementById('cardSelector');
+        selector.innerHTML = '<option value="">-- Select a Card --</option>';
+        
+        // Get unique Card Details
+        const uniqueCards = [...new Set(rawData.map(item => item['Card Details']))];
+        
+        // Sort alphabetically
+        uniqueCards.sort().forEach(card => {
+            if(card) {
+                const option = document.createElement('option');
+                option.value = card;
+                option.textContent = card;
+                selector.appendChild(option);
+            }
+        });
+
+        selector.disabled = false;
+
+        // Listen for selection changes
+        selector.addEventListener('change', function(e) {
+            currentCardDetails = e.target.value;
+            if(currentCardDetails) {
+                updateChart(0); // Default to All Time when a new card is selected
+            }
+        });
+    }
+
+    // 3. Filter Data and Draw Chart
+    function updateChart(days) {
+        if (!currentCardDetails) return;
+
+        // Filter data for the selected card
+        let filteredData = rawData.filter(item => item['Card Details'] === currentCardDetails);
+        
+        // Sort by Date ascending
+        filteredData.sort((a, b) => new Date(a.Date) - new Date(b.Date));
+
+        // Apply timeframe preset
+        if (days > 0) {
+            filteredData = filteredData.slice(-days);
+        }
+
+        const labels = filteredData.map(item => item.Date);
+        const totalPopData = filteredData.map(item => parseInt(item['Total Pop']) || 0);
+        const psa10Data = filteredData.map(item => parseInt(item['PSA 10 Pop']) || 0);
+
+        renderChart(labels, totalPopData, psa10Data);
+    }
+
+    // 4. Render Chart.js
+    function renderChart(labels, totalPopData, psa10Data) {
+        const ctx = document.getElementById('popChart').getContext('2d');
+        
+        // Destroy existing chart if it exists to prevent overlap
+        if (myChart) {
+            myChart.destroy();
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Total Pop',
+                        data: totalPopData,
+                        borderColor: '#1A365D',
+                        backgroundColor: 'rgba(26, 54, 93, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'PSA 10 Pop',
+                        data: psa10Data,
+                        borderColor: '#e53e3e',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        enabled: true
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false // Better for seeing small daily changes in high-pop cards
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
