@@ -15,7 +15,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1100px;
             margin: auto;
             background: #fff;
             padding: 20px;
@@ -23,7 +23,7 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         h1 {
-            color: #1A365D; /* Matches your Google Sheet header */
+            color: #1A365D;
             text-align: center;
         }
         .controls {
@@ -39,12 +39,17 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-wrap: wrap;
         }
-        select, input[type="file"], button {
+        select, input[type="file"], input[type="date"], button {
             padding: 8px 12px;
             border: 1px solid #ccc;
             border-radius: 4px;
             font-size: 14px;
+        }
+        select {
+            flex-grow: 1;
+            max-width: 800px;
         }
         button {
             background-color: #1A365D;
@@ -56,10 +61,24 @@
         button:hover {
             background-color: #2c5282;
         }
+        .graphs-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
         .chart-container {
             position: relative;
-            height: 50vh;
+            height: 40vh;
             width: 100%;
+            border: 1px solid #eaeaea;
+            padding: 10px;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        h3 {
+            text-align: center;
+            margin: 0 0 10px 0;
+            color: #4a5568;
         }
         #warning {
             color: #d9534f;
@@ -83,31 +102,64 @@
         </div>
         
         <div class="control-group">
-            <label for="cardSelector"><strong>2. Select Card:</strong></label>
-            <select id="cardSelector" disabled>
+            <label for="setSelector"><strong>2a. Filter by Set:</strong></label>
+            <select id="setSelector" disabled>
                 <option value="">Upload CSV first...</option>
             </select>
         </div>
 
         <div class="control-group">
-            <label><strong>3. Timeframe:</strong></label>
+            <label for="cardSelector"><strong>2b. Select Card:</strong></label>
+            <select id="cardSelector" disabled>
+                <option value="">Select a Set first...</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label><strong>3. Presets:</strong></label>
             <button onclick="updateChart(7)">Last 7 Days</button>
+            <button onclick="updateChart(14)">Fortnight (14 Days)</button>
             <button onclick="updateChart(30)">Last 30 Days</button>
             <button onclick="updateChart(0)">All Time</button>
         </div>
+
+        <div class="control-group">
+            <label><strong>Custom Range:</strong></label>
+            <input type="date" id="startDate">
+            <span>to</span>
+            <input type="date" id="endDate">
+            <button onclick="applyCustomDateRange()" style="background-color: #2b6cb0;">Apply Range</button>
+        </div>
     </div>
 
-    <div class="chart-container">
-        <canvas id="popChart"></canvas>
+    <div class="graphs-wrapper">
+        <div class="chart-container">
+            <h3>Cumulative Total Population</h3>
+            <canvas id="totalPopChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>Daily Population Change (New Additions)</h3>
+            <canvas id="dailyChangeChart"></canvas>
+        </div>
     </div>
 </div>
 
 <script>
     let rawData = [];
-    let myChart = null;
+    let uniqueSets = {}; 
+    let allCardData = []; // Holds the processed history for the currently selected card
+    let myTotalChart = null;
+    let myDailyChart = null;
     let currentCardDetails = "";
 
-    // 1. Handle File Upload via PapaParse
+    // Helper: Extracts set name by grabbing everything before the card number
+    function extractSetFromName(cardName) {
+        if (!cardName) return "Unknown Set";
+        const match = cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
+        return match ? match[1] : "Other Cards";
+    }
+
+    // 1. Handle File Upload
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -117,117 +169,174 @@
             skipEmptyLines: true,
             complete: function(results) {
                 rawData = results.data;
-                populateDropdown();
+                processSets();
             }
         });
     });
 
-    // 2. Populate Dropdown with Unique Cards
-    function populateDropdown() {
-        const selector = document.getElementById('cardSelector');
-        selector.innerHTML = '<option value="">-- Select a Card --</option>';
+    // 2. Process Data into Sets and Populate Dropdown
+    function processSets() {
+        uniqueSets = {};
         
-        // Get unique Card Details
-        const uniqueCards = [...new Set(rawData.map(item => item['Card Details']))];
-        
-        // Sort alphabetically
-        uniqueCards.sort().forEach(card => {
-            if(card) {
-                const option = document.createElement('option');
-                option.value = card;
-                option.textContent = card;
-                selector.appendChild(option);
+        rawData.forEach(item => {
+            const cardName = item['Card Details'];
+            if (!cardName) return;
+            
+            const setName = extractSetFromName(cardName);
+            if (!uniqueSets[setName]) {
+                uniqueSets[setName] = new Set();
             }
+            uniqueSets[setName].add(cardName);
         });
 
-        selector.disabled = false;
+        const setSelector = document.getElementById('setSelector');
+        setSelector.innerHTML = '<option value="">-- Select a Set --</option>';
+        
+        Object.keys(uniqueSets).sort().forEach(set => {
+            const option = document.createElement('option');
+            option.value = set;
+            option.textContent = set;
+            setSelector.appendChild(option);
+        });
 
-        // Listen for selection changes
-        selector.addEventListener('change', function(e) {
+        setSelector.disabled = false;
+
+        setSelector.addEventListener('change', function(e) {
+            populateCardDropdown(e.target.value);
+        });
+    }
+
+    // 3. Populate Cards based on selected Set
+    function populateCardDropdown(selectedSet) {
+        const cardSelector = document.getElementById('cardSelector');
+        cardSelector.innerHTML = '<option value="">-- Select a Card --</option>';
+        
+        if (!selectedSet || !uniqueSets[selectedSet]) {
+            cardSelector.disabled = true;
+            return;
+        }
+
+        const cards = Array.from(uniqueSets[selectedSet]).sort();
+        cards.forEach(card => {
+            const option = document.createElement('option');
+            option.value = card;
+            option.textContent = card;
+            cardSelector.appendChild(option);
+        });
+
+        cardSelector.disabled = false;
+
+        cardSelector.addEventListener('change', function(e) {
             currentCardDetails = e.target.value;
             if(currentCardDetails) {
-                updateChart(0); // Default to All Time when a new card is selected
+                prepareCardData();
+                updateChart(0); // Default to All Time when new card selected
             }
         });
     }
 
-    // 3. Filter Data and Draw Chart
-    function updateChart(days) {
-        if (!currentCardDetails) return;
-
-        // Filter data for the selected card
-        let filteredData = rawData.filter(item => item['Card Details'] === currentCardDetails);
+    // 4. Pre-calculate Daily Deltas for the Selected Card
+    function prepareCardData() {
+        allCardData = rawData.filter(item => item['Card Details'] === currentCardDetails);
         
-        // Sort by Date ascending
-        filteredData.sort((a, b) => new Date(a.Date) - new Date(b.Date));
+        // Sort chronologically
+        allCardData.sort((a, b) => new Date(a.Date) - new Date(b.Date));
 
-        // Apply timeframe preset
-        if (days > 0) {
-            filteredData = filteredData.slice(-days);
-        }
-
-        const labels = filteredData.map(item => item.Date);
-        const totalPopData = filteredData.map(item => parseInt(item['Total Pop']) || 0);
-        const psa10Data = filteredData.map(item => parseInt(item['PSA 10 Pop']) || 0);
-
-        renderChart(labels, totalPopData, psa10Data);
+        // Calculate deltas
+        allCardData.forEach((item, index) => {
+            let currentTotal = parseInt(item['Total Pop']) || 0;
+            let current10 = parseInt(item['PSA 10 Pop']) || 0;
+            
+            if (index === 0) {
+                item.deltaTotal = 0;
+                item.delta10 = 0;
+            } else {
+                let prevTotal = parseInt(allCardData[index-1]['Total Pop']) || 0;
+                let prev10 = parseInt(allCardData[index-1]['PSA 10 Pop']) || 0;
+                item.deltaTotal = currentTotal - prevTotal;
+                item.delta10 = current10 - prev10;
+            }
+        });
     }
 
-    // 4. Render Chart.js
-    function renderChart(labels, totalPopData, psa10Data) {
-        const ctx = document.getElementById('popChart').getContext('2d');
-        
-        // Destroy existing chart if it exists to prevent overlap
-        if (myChart) {
-            myChart.destroy();
+    // 5. Preset Timeframe Update
+    function updateChart(days) {
+        if (!currentCardDetails || allCardData.length === 0) return;
+
+        let displayData = [...allCardData];
+
+        if (days > 0) {
+            displayData = displayData.slice(-days);
         }
 
-        myChart = new Chart(ctx, {
+        renderCharts(displayData);
+    }
+
+    // 6. Custom Date Range Update
+    function applyCustomDateRange() {
+        if (!currentCardDetails || allCardData.length === 0) return;
+        
+        let startVal = document.getElementById('startDate').value;
+        let endVal = document.getElementById('endDate').value;
+        
+        if(!startVal || !endVal) {
+            alert("Please select both a start and end date.");
+            return;
+        }
+
+        // Add time suffix to prevent timezone shifting issues
+        let startDate = new Date(startVal + 'T00:00:00');
+        let endDate = new Date(endVal + 'T23:59:59');
+
+        let displayData = allCardData.filter(item => {
+            let itemDate = new Date(item.Date + 'T00:00:00');
+            return itemDate >= startDate && itemDate <= endDate;
+        });
+
+        if (displayData.length === 0) {
+            alert("No data found in this date range.");
+            return;
+        }
+
+        renderCharts(displayData);
+    }
+
+    // 7. Render Both Charts
+    function renderCharts(dataArray) {
+        const labels = dataArray.map(item => item.Date);
+        
+        const totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
+        const psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
+        
+        const deltaTotalData = dataArray.map(item => item.deltaTotal);
+        const delta10Data = dataArray.map(item => item.delta10);
+
+        // Chart 1: Cumulative Total (Line)
+        if (myTotalChart) myTotalChart.destroy();
+        myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [
-                    {
-                        label: 'Total Pop',
-                        data: totalPopData,
-                        borderColor: '#1A365D',
-                        backgroundColor: 'rgba(26, 54, 93, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        fill: true
-                    },
-                    {
-                        label: 'PSA 10 Pop',
-                        data: psa10Data,
-                        borderColor: '#e53e3e',
-                        backgroundColor: 'transparent',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        fill: false
-                    }
+                    { label: 'Total Pop', data: totalPopData, borderColor: '#1A365D', backgroundColor: 'rgba(26, 54, 93, 0.1)', borderWidth: 2, fill: true, tension: 0.1 },
+                    { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1 }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        enabled: true
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: false // Better for seeing small daily changes in high-pop cards
-                    }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
+        });
+
+        // Chart 2: Daily Change (Bar)
+        if (myDailyChart) myDailyChart.destroy();
+        myDailyChart = new Chart(document.getElementById('dailyChangeChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'New Total Pop Added', data: deltaTotalData, backgroundColor: 'rgba(26, 54, 93, 0.7)' },
+                    { label: 'New PSA 10s Added', data: delta10Data, backgroundColor: 'rgba(229, 62, 62, 0.8)' }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
         });
     }
 </script>
