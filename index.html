@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inconspicuous CSV Formatter</title>
+    <title>Internal PSA Pop Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
@@ -61,24 +61,75 @@
         button:hover {
             background-color: #2c5282;
         }
+        
+        /* Summary Cards CSS */
+        .summary-container {
+            display: none; /* Hidden until a card is selected */
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: #ffffff;
+            border-left: 5px solid #1A365D;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-top: 1px solid #eaeaea;
+            border-right: 1px solid #eaeaea;
+            border-bottom: 1px solid #eaeaea;
+        }
+        .summary-card.accent-red {
+            border-left-color: #e53e3e;
+        }
+        .summary-card h4 {
+            margin: 0 0 10px 0;
+            font-size: 13px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .summary-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2d3748;
+            margin: 0;
+        }
+
         .graphs-wrapper {
             display: flex;
             flex-direction: column;
             gap: 30px;
         }
+        .chart-wrapper {
+            position: relative;
+            border: 1px solid #eaeaea;
+            padding: 15px 15px 40px 15px;
+            border-radius: 8px;
+            background-color: #ffffff;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .chart-header h3 {
+            margin: 0;
+            color: #4a5568;
+        }
+        .export-btn {
+            background-color: #48bb78;
+            font-size: 12px;
+            padding: 6px 10px;
+        }
+        .export-btn:hover {
+            background-color: #38a169;
+        }
         .chart-container {
             position: relative;
             height: 40vh;
             width: 100%;
-            border: 1px solid #eaeaea;
-            padding: 10px;
-            border-radius: 8px;
-            box-sizing: border-box;
-        }
-        h3 {
-            text-align: center;
-            margin: 0 0 10px 0;
-            color: #4a5568;
         }
         #warning {
             color: #d9534f;
@@ -132,34 +183,74 @@
         </div>
     </div>
 
-    <div class="graphs-wrapper">
-        <div class="chart-container">
-            <h3>Cumulative Total Population</h3>
-            <canvas id="totalPopChart"></canvas>
+    <div class="summary-container" id="summaryContainer">
+        <div class="summary-card">
+            <h4>Period Added (Total)</h4>
+            <p class="value" id="statPeriodTotal">0</p>
         </div>
-        <div class="chart-container">
-            <h3>Daily Population Change (New Additions)</h3>
-            <canvas id="dailyChangeChart"></canvas>
+        <div class="summary-card accent-red">
+            <h4>Period Added (PSA 10s)</h4>
+            <p class="value" id="statPeriod10s">0</p>
+        </div>
+        <div class="summary-card accent-red">
+            <h4>Period Gem Rate</h4>
+            <p class="value" id="statPeriodGem">0%</p>
+        </div>
+        <div class="summary-card">
+            <h4>Current Overall Gem Rate</h4>
+            <p class="value" id="statOverallGem">0%</p>
+        </div>
+    </div>
+
+    <div class="graphs-wrapper">
+        <div class="chart-wrapper">
+            <div class="chart-header">
+                <h3>Cumulative Total Population</h3>
+                <button class="export-btn" onclick="exportChart('totalPopChart', 'Cumulative_Pop')">Download PNG</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="totalPopChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-wrapper">
+            <div class="chart-header">
+                <h3>Daily Population Change (New Additions)</h3>
+                <button class="export-btn" onclick="exportChart('dailyChangeChart', 'Daily_Change')">Download PNG</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="dailyChangeChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
+    // Global Plugin to enforce a white background on export
+    Chart.register({
+        id: 'whiteBackground',
+        beforeDraw: (chart) => {
+            const ctx = chart.canvas.getContext('2d');
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, chart.width, chart.height);
+            ctx.restore();
+        }
+    });
+
     let rawData = [];
     let uniqueSets = {}; 
-    let allCardData = []; // Holds the processed history for the currently selected card
+    let allCardData = []; 
     let myTotalChart = null;
     let myDailyChart = null;
     let currentCardDetails = "";
 
-    // Helper: Extracts set name by grabbing everything before the card number
     function extractSetFromName(cardName) {
         if (!cardName) return "Unknown Set";
         const match = cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
         return match ? match[1] : "Other Cards";
     }
 
-    // 1. Handle File Upload
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -174,14 +265,11 @@
         });
     });
 
-    // 2. Process Data into Sets and Populate Dropdown
     function processSets() {
         uniqueSets = {};
-        
         rawData.forEach(item => {
             const cardName = item['Card Details'];
             if (!cardName) return;
-            
             const setName = extractSetFromName(cardName);
             if (!uniqueSets[setName]) {
                 uniqueSets[setName] = new Set();
@@ -191,7 +279,6 @@
 
         const setSelector = document.getElementById('setSelector');
         setSelector.innerHTML = '<option value="">-- Select a Set --</option>';
-        
         Object.keys(uniqueSets).sort().forEach(set => {
             const option = document.createElement('option');
             option.value = set;
@@ -200,17 +287,14 @@
         });
 
         setSelector.disabled = false;
-
         setSelector.addEventListener('change', function(e) {
             populateCardDropdown(e.target.value);
         });
     }
 
-    // 3. Populate Cards based on selected Set
     function populateCardDropdown(selectedSet) {
         const cardSelector = document.getElementById('cardSelector');
         cardSelector.innerHTML = '<option value="">-- Select a Card --</option>';
-        
         if (!selectedSet || !uniqueSets[selectedSet]) {
             cardSelector.disabled = true;
             return;
@@ -225,24 +309,20 @@
         });
 
         cardSelector.disabled = false;
-
         cardSelector.addEventListener('change', function(e) {
             currentCardDetails = e.target.value;
             if(currentCardDetails) {
                 prepareCardData();
-                updateChart(0); // Default to All Time when new card selected
+                updateChart(0); 
+                document.getElementById('summaryContainer').style.display = 'grid';
             }
         });
     }
 
-    // 4. Pre-calculate Daily Deltas for the Selected Card
     function prepareCardData() {
         allCardData = rawData.filter(item => item['Card Details'] === currentCardDetails);
-        
-        // Sort chronologically
         allCardData.sort((a, b) => new Date(a.Date) - new Date(b.Date));
 
-        // Calculate deltas
         allCardData.forEach((item, index) => {
             let currentTotal = parseInt(item['Total Pop']) || 0;
             let current10 = parseInt(item['PSA 10 Pop']) || 0;
@@ -259,23 +339,18 @@
         });
     }
 
-    // 5. Preset Timeframe Update
     function updateChart(days) {
         if (!currentCardDetails || allCardData.length === 0) return;
-
         let displayData = [...allCardData];
-
         if (days > 0) {
             displayData = displayData.slice(-days);
         }
-
         renderCharts(displayData);
+        updateSummaryStats(displayData);
     }
 
-    // 6. Custom Date Range Update
     function applyCustomDateRange() {
         if (!currentCardDetails || allCardData.length === 0) return;
-        
         let startVal = document.getElementById('startDate').value;
         let endVal = document.getElementById('endDate').value;
         
@@ -284,7 +359,6 @@
             return;
         }
 
-        // Add time suffix to prevent timezone shifting issues
         let startDate = new Date(startVal + 'T00:00:00');
         let endDate = new Date(endVal + 'T23:59:59');
 
@@ -297,21 +371,46 @@
             alert("No data found in this date range.");
             return;
         }
-
         renderCharts(displayData);
+        updateSummaryStats(displayData);
     }
 
-    // 7. Render Both Charts
+    function updateSummaryStats(dataArray) {
+        if (dataArray.length === 0) return;
+
+        // Calculate Period Totals (sum of daily deltas within the selected timeframe)
+        const periodTotalAdded = dataArray.reduce((sum, item) => sum + item.deltaTotal, 0);
+        const period10sAdded = dataArray.reduce((sum, item) => sum + item.delta10, 0);
+        
+        let periodGemRate = "0.0%";
+        if (periodTotalAdded > 0) {
+            periodGemRate = ((period10sAdded / periodTotalAdded) * 100).toFixed(1) + "%";
+        }
+
+        // Calculate Current Overall Gem Rate (based on the latest day in the view)
+        const latestDay = dataArray[dataArray.length - 1];
+        const latestTotal = parseInt(latestDay['Total Pop']) || 0;
+        const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
+        
+        let overallGemRate = "0.0%";
+        if (latestTotal > 0) {
+            overallGemRate = ((latest10s / latestTotal) * 100).toFixed(1) + "%";
+        }
+
+        // Update DOM elements
+        document.getElementById('statPeriodTotal').innerText = `+${periodTotalAdded}`;
+        document.getElementById('statPeriod10s').innerText = `+${period10sAdded}`;
+        document.getElementById('statPeriodGem').innerText = periodGemRate;
+        document.getElementById('statOverallGem').innerText = overallGemRate;
+    }
+
     function renderCharts(dataArray) {
         const labels = dataArray.map(item => item.Date);
-        
         const totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
         const psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
-        
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
-        // Chart 1: Cumulative Total (Line)
         if (myTotalChart) myTotalChart.destroy();
         myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
@@ -325,7 +424,6 @@
             options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
         });
 
-        // Chart 2: Daily Change (Bar)
         if (myDailyChart) myDailyChart.destroy();
         myDailyChart = new Chart(document.getElementById('dailyChangeChart').getContext('2d'), {
             type: 'bar',
@@ -338,6 +436,21 @@
             },
             options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
         });
+    }
+
+    // Export Function for Video Production
+    function exportChart(canvasId, prefix) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        // Clean up the card name for the file name (remove spaces and special chars)
+        let safeCardName = currentCardDetails.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+        let fileName = `${prefix}_${safeCardName}.png`;
+
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = canvas.toDataURL('image/png', 1.0);
+        link.click();
     }
 </script>
 
