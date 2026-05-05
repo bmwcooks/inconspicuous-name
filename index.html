@@ -26,6 +26,8 @@
             color: #1A365D;
             text-align: center;
         }
+        
+        /* Layout Controls */
         .controls {
             display: flex;
             flex-direction: column;
@@ -41,15 +43,11 @@
             gap: 10px;
             flex-wrap: wrap;
         }
-        select, input[type="file"], input[type="date"], button {
+        input[type="file"], input[type="date"], button {
             padding: 8px 12px;
             border: 1px solid #ccc;
             border-radius: 4px;
             font-size: 14px;
-        }
-        select {
-            flex-grow: 1;
-            max-width: 800px;
         }
         button {
             background-color: #1A365D;
@@ -61,7 +59,72 @@
         button:hover {
             background-color: #2c5282;
         }
+
+        /* Navigation Tabs CSS */
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .nav-label {
+            font-weight: bold;
+            color: #4a5568;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .tab-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .nav-btn {
+            background-color: #fff;
+            color: #2d3748;
+            border: 1px solid #cbd5e0;
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .nav-btn:hover {
+            background-color: #e2e8f0;
+        }
+        .nav-btn.active {
+            background-color: #1A365D;
+            color: #fff;
+            border-color: #1A365D;
+        }
         
+        /* Scrollable Card List */
+        .card-list-container {
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            background: #fff;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none; /* Hidden until set is selected */
+        }
+        .card-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #edf2f7;
+            font-size: 13px;
+            color: #2d3748;
+            transition: background 0.2s;
+        }
+        .card-item:last-child {
+            border-bottom: none;
+        }
+        .card-item:hover {
+            background-color: #ebf8ff;
+        }
+        .card-item.active {
+            background-color: #bee3f8;
+            font-weight: bold;
+            border-left: 4px solid #3182ce;
+        }
+
         /* Summary Cards CSS */
         .summary-container {
             display: none; 
@@ -75,9 +138,8 @@
             padding: 15px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border-top: 1px solid #eaeaea;
-            border-right: 1px solid #eaeaea;
-            border-bottom: 1px solid #eaeaea;
+            border: 1px solid #eaeaea;
+            border-left: 5px solid #1A365D;
         }
         .summary-card.accent-red {
             border-left-color: #e53e3e;
@@ -96,6 +158,7 @@
             margin: 0;
         }
 
+        /* Chart Elements */
         .graphs-wrapper {
             display: flex;
             flex-direction: column;
@@ -170,18 +233,26 @@
             <input type="file" id="csvFileInput" accept=".csv" />
         </div>
         
-        <div class="control-group">
-            <label for="setSelector"><strong>2a. Filter by Set:</strong></label>
-            <select id="setSelector" disabled>
-                <option value="">Upload CSV first...</option>
-            </select>
-        </div>
+        <div class="nav-section">
+            <div>
+                <span class="nav-label">2a. Select Year:</span>
+                <div id="yearTabs" class="tab-container">
+                    <span style="font-size: 13px; color: #718096;">Upload CSV first...</span>
+                </div>
+            </div>
+            
+            <div>
+                <span class="nav-label">2b. Select Set:</span>
+                <div id="setTabs" class="tab-container">
+                    <span style="font-size: 13px; color: #718096;">Select a year first...</span>
+                </div>
+            </div>
 
-        <div class="control-group">
-            <label for="cardSelector"><strong>2b. Select Card:</strong></label>
-            <select id="cardSelector" disabled>
-                <option value="">Select a Set first...</option>
-            </select>
+            <div>
+                <span class="nav-label">2c. Select Card:</span>
+                <div id="cardList" class="card-list-container">
+                    </div>
+            </div>
         </div>
 
         <div class="control-group">
@@ -260,20 +331,15 @@
     });
 
     let rawData = [];
-    let uniqueSets = {}; 
+    let dataHierarchy = {}; // format: { '2025': { 'SET NAME': Set('Card1', 'Card2') } }
     let allCardData = []; 
-    let currentDisplayData = []; // Store the currently filtered data for toggling
+    let currentDisplayData = []; 
     let myTotalChart = null;
     let myDailyChart = null;
     let currentCardDetails = "";
-    let isGrowthMode = false; // Tracks if we are showing absolute or period growth
+    let isGrowthMode = false; 
 
-    function extractSetFromName(cardName) {
-        if (!cardName) return "Unknown Set";
-        const match = cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
-        return match ? match[1] : "Other Cards";
-    }
-
+    // Handle File Upload
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -283,62 +349,109 @@
             skipEmptyLines: true,
             complete: function(results) {
                 rawData = results.data;
-                processSets();
+                processHierarchy();
             }
         });
     });
 
-    function processSets() {
-        uniqueSets = {};
+    // Extract structure from raw data
+    function processHierarchy() {
+        dataHierarchy = {};
+        
         rawData.forEach(item => {
             const cardName = item['Card Details'];
             if (!cardName) return;
-            const setName = extractSetFromName(cardName);
-            if (!uniqueSets[setName]) {
-                uniqueSets[setName] = new Set();
+
+            let year = "Other";
+            let set = "Other Sets";
+
+            // Extract Year (4 digits at start)
+            const yearMatch = cardName.match(/^(\d{4})\s/);
+            if (yearMatch) {
+                year = yearMatch[1];
+                // Extract Set (Everything between Year and Card Number)
+                const setMatch = cardName.match(/^\d{4}\s+(.*?)(?=\s\d{1,4}\s)/);
+                if (setMatch) set = setMatch[1];
+            } else {
+                // Fallback for cards without a year
+                const setMatch = cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
+                if (setMatch) set = setMatch[1];
             }
-            uniqueSets[setName].add(cardName);
+
+            // Initialize structure
+            if (!dataHierarchy[year]) dataHierarchy[year] = {};
+            if (!dataHierarchy[year][set]) dataHierarchy[year][set] = new Set();
+            
+            dataHierarchy[year][set].add(cardName);
         });
 
-        const setSelector = document.getElementById('setSelector');
-        setSelector.innerHTML = '<option value="">-- Select a Set --</option>';
-        Object.keys(uniqueSets).sort().forEach(set => {
-            const option = document.createElement('option');
-            option.value = set;
-            option.textContent = set;
-            setSelector.appendChild(option);
+        renderYearTabs();
+    }
+
+    function renderYearTabs() {
+        const container = document.getElementById('yearTabs');
+        container.innerHTML = '';
+        
+        const years = Object.keys(dataHierarchy).sort(); // Alphabetical / Ascending
+
+        years.forEach(year => {
+            const btn = document.createElement('button');
+            btn.className = 'nav-btn';
+            btn.textContent = year;
+            btn.onclick = () => {
+                document.querySelectorAll('#yearTabs .nav-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderSetTabs(year);
+                
+                // Clear lower tiers
+                document.getElementById('cardList').style.display = 'none';
+            };
+            container.appendChild(btn);
         });
 
-        setSelector.disabled = false;
-        setSelector.addEventListener('change', function(e) {
-            populateCardDropdown(e.target.value);
+        document.getElementById('setTabs').innerHTML = '<span style="font-size: 13px; color: #718096;">Select a year above...</span>';
+    }
+
+    function renderSetTabs(selectedYear) {
+        const container = document.getElementById('setTabs');
+        container.innerHTML = '';
+        
+        const sets = Object.keys(dataHierarchy[selectedYear]).sort(); // Alphabetical
+
+        sets.forEach(set => {
+            const btn = document.createElement('button');
+            btn.className = 'nav-btn';
+            btn.textContent = set;
+            btn.onclick = () => {
+                document.querySelectorAll('#setTabs .nav-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderCardList(selectedYear, set);
+            };
+            container.appendChild(btn);
         });
     }
 
-    function populateCardDropdown(selectedSet) {
-        const cardSelector = document.getElementById('cardSelector');
-        cardSelector.innerHTML = '<option value="">-- Select a Card --</option>';
-        if (!selectedSet || !uniqueSets[selectedSet]) {
-            cardSelector.disabled = true;
-            return;
-        }
+    function renderCardList(year, set) {
+        const container = document.getElementById('cardList');
+        container.innerHTML = '';
+        container.style.display = 'block';
+        
+        const cards = Array.from(dataHierarchy[year][set]).sort(); // Alphabetical
 
-        const cards = Array.from(uniqueSets[selectedSet]).sort();
         cards.forEach(card => {
-            const option = document.createElement('option');
-            option.value = card;
-            option.textContent = card;
-            cardSelector.appendChild(option);
-        });
-
-        cardSelector.disabled = false;
-        cardSelector.addEventListener('change', function(e) {
-            currentCardDetails = e.target.value;
-            if(currentCardDetails) {
+            const div = document.createElement('div');
+            div.className = 'card-item';
+            div.textContent = card;
+            div.onclick = () => {
+                document.querySelectorAll('.card-item').forEach(c => c.classList.remove('active'));
+                div.classList.add('active');
+                currentCardDetails = card;
+                
                 prepareCardData();
-                updateChart(0); 
+                updateChart(0); // Trigger all-time view
                 document.getElementById('summaryContainer').style.display = 'grid';
-            }
+            };
+            container.appendChild(div);
         });
     }
 
@@ -400,7 +513,6 @@
         updateSummaryStats();
     }
 
-    // Toggle logic for Growth vs Absolute mode
     function toggleGrowthMode() {
         isGrowthMode = !isGrowthMode;
         
@@ -417,7 +529,6 @@
             title.innerText = "Cumulative Total Population";
         }
 
-        // Re-render chart with the new mode using the existing filtered data
         if (currentDisplayData.length > 0) {
             renderCharts();
         }
@@ -455,20 +566,16 @@
         if (dataArray.length === 0) return;
 
         const labels = dataArray.map(item => item.Date);
-        
         let totalPopData = [];
         let psa10Data = [];
 
-        // Apply mode logic
         if (isGrowthMode && dataArray.length > 0) {
-            // Subtract the baseline (Day 1 of the selected period) from all points
             let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
             let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
 
             totalPopData = dataArray.map(item => (parseInt(item['Total Pop']) || 0) - baselineTotal);
             psa10Data = dataArray.map(item => (parseInt(item['PSA 10 Pop']) || 0) - baseline10);
         } else {
-            // Show absolute numbers
             totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
             psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
         }
@@ -508,7 +615,6 @@
         if (!canvas) return;
         
         let safeCardName = currentCardDetails.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
-        // Append mode name if we are exporting the top chart while in growth mode
         let finalPrefix = (canvasId === 'totalPopChart' && isGrowthMode) ? 'Period_Growth' : prefix;
         let fileName = `${finalPrefix}_${safeCardName}.png`;
 
