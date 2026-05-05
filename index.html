@@ -64,7 +64,7 @@
         
         /* Summary Cards CSS */
         .summary-container {
-            display: none; /* Hidden until a card is selected */
+            display: none; 
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin-bottom: 30px;
@@ -113,6 +113,13 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .chart-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         .chart-header h3 {
             margin: 0;
@@ -125,6 +132,17 @@
         }
         .export-btn:hover {
             background-color: #38a169;
+        }
+        .toggle-btn {
+            background-color: #edf2f7;
+            color: #2d3748;
+            border: 1px solid #cbd5e0;
+            font-size: 12px;
+            padding: 6px 10px;
+            font-weight: bold;
+        }
+        .toggle-btn:hover {
+            background-color: #e2e8f0;
         }
         .chart-container {
             position: relative;
@@ -205,7 +223,10 @@
     <div class="graphs-wrapper">
         <div class="chart-wrapper">
             <div class="chart-header">
-                <h3>Cumulative Total Population</h3>
+                <div class="chart-header-left">
+                    <h3 id="totalChartTitle">Cumulative Total Population</h3>
+                    <button class="toggle-btn" id="modeToggleBtn" onclick="toggleGrowthMode()">Mode: Absolute Numbers</button>
+                </div>
                 <button class="export-btn" onclick="exportChart('totalPopChart', 'Cumulative_Pop')">Download PNG</button>
             </div>
             <div class="chart-container">
@@ -241,9 +262,11 @@
     let rawData = [];
     let uniqueSets = {}; 
     let allCardData = []; 
+    let currentDisplayData = []; // Store the currently filtered data for toggling
     let myTotalChart = null;
     let myDailyChart = null;
     let currentCardDetails = "";
+    let isGrowthMode = false; // Tracks if we are showing absolute or period growth
 
     function extractSetFromName(cardName) {
         if (!cardName) return "Unknown Set";
@@ -345,8 +368,9 @@
         if (days > 0) {
             displayData = displayData.slice(-days);
         }
-        renderCharts(displayData);
-        updateSummaryStats(displayData);
+        currentDisplayData = displayData;
+        renderCharts();
+        updateSummaryStats();
     }
 
     function applyCustomDateRange() {
@@ -371,14 +395,38 @@
             alert("No data found in this date range.");
             return;
         }
-        renderCharts(displayData);
-        updateSummaryStats(displayData);
+        currentDisplayData = displayData;
+        renderCharts();
+        updateSummaryStats();
     }
 
-    function updateSummaryStats(dataArray) {
+    // Toggle logic for Growth vs Absolute mode
+    function toggleGrowthMode() {
+        isGrowthMode = !isGrowthMode;
+        
+        const btn = document.getElementById('modeToggleBtn');
+        const title = document.getElementById('totalChartTitle');
+
+        if (isGrowthMode) {
+            btn.innerText = "Mode: Period Growth";
+            btn.style.backgroundColor = "#bee3f8";
+            title.innerText = "Cumulative Growth in Period";
+        } else {
+            btn.innerText = "Mode: Absolute Numbers";
+            btn.style.backgroundColor = "#edf2f7";
+            title.innerText = "Cumulative Total Population";
+        }
+
+        // Re-render chart with the new mode using the existing filtered data
+        if (currentDisplayData.length > 0) {
+            renderCharts();
+        }
+    }
+
+    function updateSummaryStats() {
+        const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
 
-        // Calculate Period Totals (sum of daily deltas within the selected timeframe)
         const periodTotalAdded = dataArray.reduce((sum, item) => sum + item.deltaTotal, 0);
         const period10sAdded = dataArray.reduce((sum, item) => sum + item.delta10, 0);
         
@@ -387,7 +435,6 @@
             periodGemRate = ((period10sAdded / periodTotalAdded) * 100).toFixed(1) + "%";
         }
 
-        // Calculate Current Overall Gem Rate (based on the latest day in the view)
         const latestDay = dataArray[dataArray.length - 1];
         const latestTotal = parseInt(latestDay['Total Pop']) || 0;
         const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
@@ -397,17 +444,35 @@
             overallGemRate = ((latest10s / latestTotal) * 100).toFixed(1) + "%";
         }
 
-        // Update DOM elements
         document.getElementById('statPeriodTotal').innerText = `+${periodTotalAdded}`;
         document.getElementById('statPeriod10s').innerText = `+${period10sAdded}`;
         document.getElementById('statPeriodGem').innerText = periodGemRate;
         document.getElementById('statOverallGem').innerText = overallGemRate;
     }
 
-    function renderCharts(dataArray) {
+    function renderCharts() {
+        const dataArray = currentDisplayData;
+        if (dataArray.length === 0) return;
+
         const labels = dataArray.map(item => item.Date);
-        const totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
-        const psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
+        
+        let totalPopData = [];
+        let psa10Data = [];
+
+        // Apply mode logic
+        if (isGrowthMode && dataArray.length > 0) {
+            // Subtract the baseline (Day 1 of the selected period) from all points
+            let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
+            let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
+
+            totalPopData = dataArray.map(item => (parseInt(item['Total Pop']) || 0) - baselineTotal);
+            psa10Data = dataArray.map(item => (parseInt(item['PSA 10 Pop']) || 0) - baseline10);
+        } else {
+            // Show absolute numbers
+            totalPopData = dataArray.map(item => parseInt(item['Total Pop']) || 0);
+            psa10Data = dataArray.map(item => parseInt(item['PSA 10 Pop']) || 0);
+        }
+        
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
@@ -438,14 +503,14 @@
         });
     }
 
-    // Export Function for Video Production
     function exportChart(canvasId, prefix) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
         
-        // Clean up the card name for the file name (remove spaces and special chars)
         let safeCardName = currentCardDetails.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
-        let fileName = `${prefix}_${safeCardName}.png`;
+        // Append mode name if we are exporting the top chart while in growth mode
+        let finalPrefix = (canvasId === 'totalPopChart' && isGrowthMode) ? 'Period_Growth' : prefix;
+        let fileName = `${finalPrefix}_${safeCardName}.png`;
 
         const link = document.createElement('a');
         link.download = fileName;
