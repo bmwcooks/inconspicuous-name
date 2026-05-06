@@ -103,7 +103,7 @@
             background: #fff;
             max-height: 250px;
             overflow-y: auto;
-            display: none; /* Hidden until set is selected */
+            display: none; 
         }
         .card-item {
             padding: 10px 15px;
@@ -125,9 +125,78 @@
             border-left: 4px solid #3182ce;
         }
 
+        /* Main Dashboard Area */
+        #mainDashboard {
+            display: none; /* Hidden until card is selected */
+            border-top: 2px solid #e2e8f0;
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        .card-header-title {
+            text-align: center;
+            color: #1A365D;
+            font-size: 22px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        /* Donut Distribution Gauge */
+        .distribution-panel {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #eaeaea;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            gap: 40px;
+        }
+        .donut-container {
+            position: relative;
+            width: 220px;
+            height: 220px;
+        }
+        .donut-center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .donut-total-val {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2d3748;
+            line-height: 1;
+        }
+        .donut-total-label {
+            font-size: 11px;
+            color: #718096;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+        .donut-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
         /* Summary Cards CSS */
         .summary-container {
-            display: none; 
+            display: grid; 
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin-bottom: 30px;
@@ -138,8 +207,9 @@
             padding: 15px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border: 1px solid #eaeaea;
-            border-left: 5px solid #1A365D;
+            border-top: 1px solid #eaeaea;
+            border-right: 1px solid #eaeaea;
+            border-bottom: 1px solid #eaeaea;
         }
         .summary-card.accent-red {
             border-left-color: #e53e3e;
@@ -250,8 +320,7 @@
 
             <div>
                 <span class="nav-label">2c. Select Card:</span>
-                <div id="cardList" class="card-list-container">
-                    </div>
+                <div id="cardList" class="card-list-container"></div>
             </div>
         </div>
 
@@ -272,52 +341,78 @@
         </div>
     </div>
 
-    <div class="summary-container" id="summaryContainer">
-        <div class="summary-card">
-            <h4>Period Added (Total)</h4>
-            <p class="value" id="statPeriodTotal">0</p>
-        </div>
-        <div class="summary-card accent-red">
-            <h4>Period Added (PSA 10s)</h4>
-            <p class="value" id="statPeriod10s">0</p>
-        </div>
-        <div class="summary-card accent-red">
-            <h4>Period Gem Rate</h4>
-            <p class="value" id="statPeriodGem">0%</p>
-        </div>
-        <div class="summary-card">
-            <h4>Current Overall Gem Rate</h4>
-            <p class="value" id="statOverallGem">0%</p>
-        </div>
-    </div>
+    <div id="mainDashboard">
+        
+        <div class="card-header-title" id="displayCardName">Card Name</div>
 
-    <div class="graphs-wrapper">
-        <div class="chart-wrapper">
-            <div class="chart-header">
-                <div class="chart-header-left">
-                    <h3 id="totalChartTitle">Cumulative Total Population</h3>
-                    <button class="toggle-btn" id="modeToggleBtn" onclick="toggleGrowthMode()">Mode: Absolute Numbers</button>
+        <div class="distribution-panel">
+            <div class="donut-container">
+                <canvas id="gradeDonutChart"></canvas>
+                <div class="donut-center-text">
+                    <div class="donut-total-val" id="donutTotalText">0</div>
+                    <div class="donut-total-label">TOTAL POP</div>
                 </div>
-                <button class="export-btn" onclick="exportChart('totalPopChart', 'Cumulative_Pop')">Download PNG</button>
             </div>
-            <div class="chart-container">
-                <canvas id="totalPopChart"></canvas>
+            <div class="donut-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #e53e3e;"></div>
+                    <span style="font-weight: bold; color: #2d3748;">PSA 10:</span>
+                    <span id="legend10Text">0</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #cbd5e0;"></div>
+                    <span style="font-weight: bold; color: #2d3748;">Other Grades:</span>
+                    <span id="legendOtherText">0</span>
+                </div>
             </div>
         </div>
-        <div class="chart-wrapper">
-            <div class="chart-header">
-                <h3>Daily Population Change (New Additions)</h3>
-                <button class="export-btn" onclick="exportChart('dailyChangeChart', 'Daily_Change')">Download PNG</button>
+
+        <div class="summary-container">
+            <div class="summary-card">
+                <h4>Period Added (Total)</h4>
+                <p class="value" id="statPeriodTotal">0</p>
             </div>
-            <div class="chart-container">
-                <canvas id="dailyChangeChart"></canvas>
+            <div class="summary-card accent-red">
+                <h4>Period Added (PSA 10s)</h4>
+                <p class="value" id="statPeriod10s">0</p>
+            </div>
+            <div class="summary-card accent-red">
+                <h4>Period Gem Rate</h4>
+                <p class="value" id="statPeriodGem">0%</p>
+            </div>
+            <div class="summary-card">
+                <h4>Current Overall Gem Rate</h4>
+                <p class="value" id="statOverallGem">0%</p>
+            </div>
+        </div>
+
+        <div class="graphs-wrapper">
+            <div class="chart-wrapper">
+                <div class="chart-header">
+                    <div class="chart-header-left">
+                        <h3 id="totalChartTitle">Cumulative Total Population</h3>
+                        <button class="toggle-btn" id="modeToggleBtn" onclick="toggleGrowthMode()">Mode: Absolute Numbers</button>
+                    </div>
+                    <button class="export-btn" onclick="exportChart('totalPopChart', 'Cumulative_Pop')">Download PNG</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="totalPopChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-wrapper">
+                <div class="chart-header">
+                    <h3>Daily Population Change (New Additions)</h3>
+                    <button class="export-btn" onclick="exportChart('dailyChangeChart', 'Daily_Change')">Download PNG</button>
+                </div>
+                <div class="chart-container">
+                    <canvas id="dailyChangeChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // Global Plugin to enforce a white background on export
     Chart.register({
         id: 'whiteBackground',
         beforeDraw: (chart) => {
@@ -331,15 +426,15 @@
     });
 
     let rawData = [];
-    let dataHierarchy = {}; // format: { '2025': { 'SET NAME': Set('Card1', 'Card2') } }
+    let dataHierarchy = {}; 
     let allCardData = []; 
     let currentDisplayData = []; 
     let myTotalChart = null;
     let myDailyChart = null;
+    let myDonutChart = null;
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
-    // Handle File Upload
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -354,7 +449,6 @@
         });
     });
 
-    // Extract structure from raw data
     function processHierarchy() {
         dataHierarchy = {};
         
@@ -365,20 +459,16 @@
             let year = "Other";
             let set = "Other Sets";
 
-            // Extract Year (4 digits at start)
             const yearMatch = cardName.match(/^(\d{4})\s/);
             if (yearMatch) {
                 year = yearMatch[1];
-                // Extract Set (Everything between Year and Card Number)
                 const setMatch = cardName.match(/^\d{4}\s+(.*?)(?=\s\d{1,4}\s)/);
                 if (setMatch) set = setMatch[1];
             } else {
-                // Fallback for cards without a year
                 const setMatch = cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
                 if (setMatch) set = setMatch[1];
             }
 
-            // Initialize structure
             if (!dataHierarchy[year]) dataHierarchy[year] = {};
             if (!dataHierarchy[year][set]) dataHierarchy[year][set] = new Set();
             
@@ -392,7 +482,7 @@
         const container = document.getElementById('yearTabs');
         container.innerHTML = '';
         
-        const years = Object.keys(dataHierarchy).sort(); // Alphabetical / Ascending
+        const years = Object.keys(dataHierarchy).sort(); 
 
         years.forEach(year => {
             const btn = document.createElement('button');
@@ -402,8 +492,6 @@
                 document.querySelectorAll('#yearTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 renderSetTabs(year);
-                
-                // Clear lower tiers
                 document.getElementById('cardList').style.display = 'none';
             };
             container.appendChild(btn);
@@ -416,7 +504,7 @@
         const container = document.getElementById('setTabs');
         container.innerHTML = '';
         
-        const sets = Object.keys(dataHierarchy[selectedYear]).sort(); // Alphabetical
+        const sets = Object.keys(dataHierarchy[selectedYear]).sort(); 
 
         sets.forEach(set => {
             const btn = document.createElement('button');
@@ -436,7 +524,7 @@
         container.innerHTML = '';
         container.style.display = 'block';
         
-        const cards = Array.from(dataHierarchy[year][set]).sort(); // Alphabetical
+        const cards = Array.from(dataHierarchy[year][set]).sort(); 
 
         cards.forEach(card => {
             const div = document.createElement('div');
@@ -447,9 +535,11 @@
                 div.classList.add('active');
                 currentCardDetails = card;
                 
+                document.getElementById('displayCardName').innerText = currentCardDetails;
+                document.getElementById('mainDashboard').style.display = 'block';
+
                 prepareCardData();
-                updateChart(0); // Trigger all-time view
-                document.getElementById('summaryContainer').style.display = 'grid';
+                updateChart(0); 
             };
             container.appendChild(div);
         });
@@ -482,6 +572,8 @@
             displayData = displayData.slice(-days);
         }
         currentDisplayData = displayData;
+        
+        renderDonutChart(allCardData); // Donut always shows current all-time snapshot
         renderCharts();
         updateSummaryStats();
     }
@@ -532,6 +624,41 @@
         if (currentDisplayData.length > 0) {
             renderCharts();
         }
+    }
+
+    function renderDonutChart(fullDataArray) {
+        if (fullDataArray.length === 0) return;
+        
+        const latestDay = fullDataArray[fullDataArray.length - 1];
+        const latestTotal = parseInt(latestDay['Total Pop']) || 0;
+        const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
+        const otherGrades = latestTotal - latest10s;
+
+        document.getElementById('donutTotalText').innerText = latestTotal.toLocaleString();
+        document.getElementById('legend10Text').innerText = latest10s.toLocaleString();
+        document.getElementById('legendOtherText').innerText = otherGrades.toLocaleString();
+
+        if (myDonutChart) myDonutChart.destroy();
+        myDonutChart = new Chart(document.getElementById('gradeDonutChart').getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['PSA 10', 'Other Grades'],
+                datasets: [{
+                    data: [latest10s, otherGrades],
+                    backgroundColor: ['#e53e3e', '#cbd5e0'],
+                    borderWidth: 0,
+                    cutout: '75%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                }
+            }
+        });
     }
 
     function updateSummaryStats() {
