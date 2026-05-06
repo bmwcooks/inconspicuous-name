@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Internal PSA Pop Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         body {
@@ -136,62 +137,8 @@
             text-align: center;
             color: #1A365D;
             font-size: 22px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-
-        /* Donut Distribution Gauge */
-        .distribution-panel {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #ffffff;
-            border: 1px solid #eaeaea;
-            border-radius: 8px;
-            padding: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-            gap: 40px;
-        }
-        .donut-container {
-            position: relative;
-            width: 220px;
-            height: 220px;
-        }
-        .donut-center-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-        }
-        .donut-total-val {
-            font-size: 28px;
             font-weight: bold;
-            color: #2d3748;
-            line-height: 1;
-        }
-        .donut-total-label {
-            font-size: 11px;
-            color: #718096;
-            font-weight: bold;
-            letter-spacing: 1px;
-            margin-top: 4px;
-        }
-        .donut-legend {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 3px;
         }
 
         /* Summary Cards CSS */
@@ -262,6 +209,10 @@
             background-color: #48bb78;
             font-size: 12px;
             padding: 6px 10px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            border: none;
         }
         .export-btn:hover {
             background-color: #38a169;
@@ -281,6 +232,9 @@
             position: relative;
             height: 40vh;
             width: 100%;
+        }
+        .top-chart-container {
+            height: 50vh; /* Make the top chart slightly taller for the data labels */
         }
         #warning {
             color: #d9534f;
@@ -345,25 +299,13 @@
         
         <div class="card-header-title" id="displayCardName">Card Name</div>
 
-        <div class="distribution-panel">
-            <div class="donut-container">
-                <canvas id="gradeDonutChart"></canvas>
-                <div class="donut-center-text">
-                    <div class="donut-total-val" id="donutTotalText">0</div>
-                    <div class="donut-total-label">TOTAL POP</div>
-                </div>
+        <div class="chart-wrapper" style="margin-bottom: 30px;">
+            <div class="chart-header">
+                <h3>Grading Speed (New Grades Per Day)</h3>
+                <button class="export-btn" onclick="exportChart('gradingSpeedChart', 'Grading_Speed')">Download PNG</button>
             </div>
-            <div class="donut-legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #e53e3e;"></div>
-                    <span style="font-weight: bold; color: #2d3748;">PSA 10:</span>
-                    <span id="legend10Text">0</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #cbd5e0;"></div>
-                    <span style="font-weight: bold; color: #2d3748;">Other Grades:</span>
-                    <span id="legendOtherText">0</span>
-                </div>
+            <div class="chart-container top-chart-container">
+                <canvas id="gradingSpeedChart"></canvas>
             </div>
         </div>
 
@@ -401,8 +343,8 @@
             </div>
             <div class="chart-wrapper">
                 <div class="chart-header">
-                    <h3>Daily Population Change (New Additions)</h3>
-                    <button class="export-btn" onclick="exportChart('dailyChangeChart', 'Daily_Change')">Download PNG</button>
+                    <h3>Daily Population Change (Bar View)</h3>
+                    <button class="export-btn" onclick="exportChart('dailyChangeChart', 'Daily_Change_Bar')">Download PNG</button>
                 </div>
                 <div class="chart-container">
                     <canvas id="dailyChangeChart"></canvas>
@@ -413,6 +355,10 @@
 </div>
 
 <script>
+    // Register the DataLabels plugin globally
+    Chart.register(ChartDataLabels);
+
+    // Global Plugin to enforce a white background on export
     Chart.register({
         id: 'whiteBackground',
         beforeDraw: (chart) => {
@@ -429,9 +375,9 @@
     let dataHierarchy = {}; 
     let allCardData = []; 
     let currentDisplayData = []; 
+    let mySpeedChart = null;
     let myTotalChart = null;
     let myDailyChart = null;
-    let myDonutChart = null;
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
@@ -573,7 +519,6 @@
         }
         currentDisplayData = displayData;
         
-        renderDonutChart(allCardData); // Donut always shows current all-time snapshot
         renderCharts();
         updateSummaryStats();
     }
@@ -626,41 +571,6 @@
         }
     }
 
-    function renderDonutChart(fullDataArray) {
-        if (fullDataArray.length === 0) return;
-        
-        const latestDay = fullDataArray[fullDataArray.length - 1];
-        const latestTotal = parseInt(latestDay['Total Pop']) || 0;
-        const latest10s = parseInt(latestDay['PSA 10 Pop']) || 0;
-        const otherGrades = latestTotal - latest10s;
-
-        document.getElementById('donutTotalText').innerText = latestTotal.toLocaleString();
-        document.getElementById('legend10Text').innerText = latest10s.toLocaleString();
-        document.getElementById('legendOtherText').innerText = otherGrades.toLocaleString();
-
-        if (myDonutChart) myDonutChart.destroy();
-        myDonutChart = new Chart(document.getElementById('gradeDonutChart').getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['PSA 10', 'Other Grades'],
-                datasets: [{
-                    data: [latest10s, otherGrades],
-                    backgroundColor: ['#e53e3e', '#cbd5e0'],
-                    borderWidth: 0,
-                    cutout: '75%'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: true }
-                }
-            }
-        });
-    }
-
     function updateSummaryStats() {
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
@@ -699,7 +609,6 @@
         if (isGrowthMode && dataArray.length > 0) {
             let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
             let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
-
             totalPopData = dataArray.map(item => (parseInt(item['Total Pop']) || 0) - baselineTotal);
             psa10Data = dataArray.map(item => (parseInt(item['PSA 10 Pop']) || 0) - baseline10);
         } else {
@@ -710,27 +619,83 @@
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
+        // 1. TOP CHART: Grading Speed (Line with Data Labels)
+        if (mySpeedChart) mySpeedChart.destroy();
+        mySpeedChart = new Chart(document.getElementById('gradingSpeedChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { 
+                        label: 'Total Cards Graded', 
+                        data: deltaTotalData, 
+                        borderColor: '#1A365D', 
+                        backgroundColor: '#1A365D', 
+                        borderWidth: 2, 
+                        fill: false, 
+                        tension: 0.1,
+                        datalabels: {
+                            color: '#1A365D',
+                            align: 'top',
+                            offset: 4,
+                            font: { weight: 'bold' },
+                            formatter: function(value) { return value > 0 ? '+' + value : ''; }
+                        }
+                    },
+                    { 
+                        label: 'PSA 10s Graded', 
+                        data: delta10Data, 
+                        borderColor: '#e53e3e', 
+                        backgroundColor: '#e53e3e', 
+                        borderWidth: 2, 
+                        fill: false, 
+                        tension: 0.1,
+                        datalabels: {
+                            color: '#e53e3e',
+                            align: 'bottom',
+                            offset: 4,
+                            font: { weight: 'bold' },
+                            formatter: function(value) { return value > 0 ? '+' + value : ''; }
+                        }
+                    }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                layout: { padding: { top: 25, right: 20, left: 20, bottom: 20 } },
+                plugins: {
+                    datalabels: {
+                        // Only show the label if the number is greater than 0
+                        display: function(context) { return context.dataset.data[context.dataIndex] > 0; }
+                    }
+                }
+            }
+        });
+
+        // 2. BOTTOM LEFT: Cumulative Population
         if (myTotalChart) myTotalChart.destroy();
         myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [
-                    { label: 'Total Pop', data: totalPopData, borderColor: '#1A365D', backgroundColor: 'rgba(26, 54, 93, 0.1)', borderWidth: 2, fill: true, tension: 0.1 },
-                    { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1 }
+                    { label: 'Total Pop', data: totalPopData, borderColor: '#1A365D', backgroundColor: 'rgba(26, 54, 93, 0.1)', borderWidth: 2, fill: true, tension: 0.1, datalabels: { display: false } },
+                    { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1, datalabels: { display: false } }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
         });
 
+        // 3. BOTTOM RIGHT: Daily Change Bar Chart
         if (myDailyChart) myDailyChart.destroy();
         myDailyChart = new Chart(document.getElementById('dailyChangeChart').getContext('2d'), {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
-                    { label: 'New Total Pop Added', data: deltaTotalData, backgroundColor: 'rgba(26, 54, 93, 0.7)' },
-                    { label: 'New PSA 10s Added', data: delta10Data, backgroundColor: 'rgba(229, 62, 62, 0.8)' }
+                    { label: 'New Total Pop Added', data: deltaTotalData, backgroundColor: 'rgba(26, 54, 93, 0.7)', datalabels: { display: false } },
+                    { label: 'New PSA 10s Added', data: delta10Data, backgroundColor: 'rgba(229, 62, 62, 0.8)', datalabels: { display: false } }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
