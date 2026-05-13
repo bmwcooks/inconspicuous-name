@@ -8,6 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
+        /* 🎨 STYLE CHANGE: Change 'Arial' to any other font like 'Helvetica', 'Verdana', or 'Roboto' */
+        /* 🎨 STYLE CHANGE: Change the background-color hex code to change the main page background */
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f7f6;
@@ -23,6 +25,7 @@
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
+        /* 🎨 STYLE CHANGE: This controls the color of the main "Internal Population Tracker" title */
         h1 {
             color: #1A365D;
             text-align: center;
@@ -50,6 +53,8 @@
             border-radius: 4px;
             font-size: 14px;
         }
+        
+        /* 🎨 STYLE CHANGE: This controls the color of the "Last 7 Days", "All Time", etc. buttons */
         button {
             background-color: #1A365D;
             color: white;
@@ -57,6 +62,7 @@
             border: none;
             transition: background 0.3s;
         }
+        /* 🎨 STYLE CHANGE: This is the color the button turns when you hover your mouse over it */
         button:hover {
             background-color: #2c5282;
         }
@@ -79,6 +85,8 @@
             gap: 8px;
             flex-wrap: wrap;
         }
+        
+        /* 🎨 STYLE CHANGE: These are the unselected Year and Set tabs */
         .nav-btn {
             background-color: #fff;
             color: #2d3748;
@@ -91,6 +99,7 @@
         .nav-btn:hover {
             background-color: #e2e8f0;
         }
+        /* 🎨 STYLE CHANGE: This is the color of the Year/Set tab when it is actively selected */
         .nav-btn.active {
             background-color: #1A365D;
             color: #fff;
@@ -102,6 +111,7 @@
             border: 1px solid #cbd5e0;
             border-radius: 6px;
             background: #fff;
+            /* 🎨 STYLE CHANGE: Adjust 250px to make the card list box taller or shorter */
             max-height: 250px;
             overflow-y: auto;
             display: none; 
@@ -114,12 +124,10 @@
             color: #2d3748;
             transition: background 0.2s;
         }
-        .card-item:last-child {
-            border-bottom: none;
-        }
         .card-item:hover {
             background-color: #ebf8ff;
         }
+        /* 🎨 STYLE CHANGE: The background and side-stripe color of the specific card you clicked on */
         .card-item.active {
             background-color: #bee3f8;
             font-weight: bold;
@@ -128,7 +136,7 @@
 
         /* Main Dashboard Area */
         #mainDashboard {
-            display: none; /* Hidden until card is selected */
+            display: none; 
             border-top: 2px solid #e2e8f0;
             padding-top: 20px;
             margin-top: 20px;
@@ -150,6 +158,7 @@
         }
         .summary-card {
             background: #ffffff;
+            /* 🎨 STYLE CHANGE: The blue stripe on the left of the Total Pop summary cards */
             border-left: 5px solid #1A365D;
             padding: 15px;
             border-radius: 6px;
@@ -159,6 +168,7 @@
             border-bottom: 1px solid #eaeaea;
         }
         .summary-card.accent-red {
+            /* 🎨 STYLE CHANGE: The red stripe on the left of the PSA 10 summary cards */
             border-left-color: #e53e3e;
         }
         .summary-card h4 {
@@ -205,6 +215,7 @@
             margin: 0;
             color: #4a5568;
         }
+        /* 🎨 STYLE CHANGE: The green Download PNG button color */
         .export-btn {
             background-color: #48bb78;
             font-size: 12px;
@@ -228,13 +239,16 @@
         .toggle-btn:hover {
             background-color: #e2e8f0;
         }
+        
+        /* 🎨 STYLE CHANGE: These control the height of the actual graphs. 
+           'vh' means 'viewport height'. 40vh means it takes up 40% of your screen height. */
         .chart-container {
             position: relative;
             height: 40vh;
             width: 100%;
         }
         .top-chart-container {
-            height: 50vh; /* Make the top chart slightly taller for the data labels */
+            height: 50vh; 
         }
         #warning {
             color: #d9534f;
@@ -264,14 +278,12 @@
                     <span style="font-size: 13px; color: #718096;">Upload CSV first...</span>
                 </div>
             </div>
-            
             <div>
                 <span class="nav-label">2b. Select Set:</span>
                 <div id="setTabs" class="tab-container">
                     <span style="font-size: 13px; color: #718096;">Select a year first...</span>
                 </div>
             </div>
-
             <div>
                 <span class="nav-label">2c. Select Card:</span>
                 <div id="cardList" class="card-list-container"></div>
@@ -296,7 +308,6 @@
     </div>
 
     <div id="mainDashboard">
-        
         <div class="card-header-title" id="displayCardName">Card Name</div>
 
         <div class="chart-wrapper" style="margin-bottom: 30px;">
@@ -355,10 +366,10 @@
 </div>
 
 <script>
-    // Register the DataLabels plugin globally
+    // ⚙️ FUNCTION: This activates the plugin that draws the + numbers on the line chart
     Chart.register(ChartDataLabels);
 
-    // Global Plugin to enforce a white background on export
+    // ⚙️ FUNCTION: This ensures when you download a PNG, the background is solid white instead of invisible/transparent
     Chart.register({
         id: 'whiteBackground',
         beforeDraw: (chart) => {
@@ -371,6 +382,7 @@
         }
     });
 
+    // ⚙️ VARIABLE SETUP: Creating empty buckets to hold our data later
     let rawData = [];
     let dataHierarchy = {}; 
     let allCardData = []; 
@@ -381,6 +393,7 @@
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
+    // ⚙️ FUNCTION: File Uploader. When you select a CSV, PapaParse instantly reads it locally in your browser.
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -390,11 +403,12 @@
             skipEmptyLines: true,
             complete: function(results) {
                 rawData = results.data;
-                processHierarchy();
+                processHierarchy(); // After reading the file, sort it.
             }
         });
     });
 
+    // ⚙️ FUNCTION: Data Sorter. This reads the name of every card and extracts the 4-digit year and the Set name to build the tabs.
     function processHierarchy() {
         dataHierarchy = {};
         
@@ -405,6 +419,7 @@
             let year = "Other";
             let set = "Other Sets";
 
+            // Looks for exactly 4 digits at the start of the string (the year)
             const yearMatch = cardName.match(/^(\d{4})\s/);
             if (yearMatch) {
                 year = yearMatch[1];
@@ -424,10 +439,10 @@
         renderYearTabs();
     }
 
+    // ⚙️ FUNCTION: Draws the top row of Year buttons based on the sorted data
     function renderYearTabs() {
         const container = document.getElementById('yearTabs');
         container.innerHTML = '';
-        
         const years = Object.keys(dataHierarchy).sort(); 
 
         years.forEach(year => {
@@ -446,10 +461,10 @@
         document.getElementById('setTabs').innerHTML = '<span style="font-size: 13px; color: #718096;">Select a year above...</span>';
     }
 
+    // ⚙️ FUNCTION: Draws the second row of Set buttons based on which Year you clicked
     function renderSetTabs(selectedYear) {
         const container = document.getElementById('setTabs');
         container.innerHTML = '';
-        
         const sets = Object.keys(dataHierarchy[selectedYear]).sort(); 
 
         sets.forEach(set => {
@@ -465,11 +480,11 @@
         });
     }
 
+    // ⚙️ FUNCTION: Draws the vertical list of specific cards based on which Set you clicked
     function renderCardList(year, set) {
         const container = document.getElementById('cardList');
         container.innerHTML = '';
         container.style.display = 'block';
-        
         const cards = Array.from(dataHierarchy[year][set]).sort(); 
 
         cards.forEach(card => {
@@ -485,12 +500,13 @@
                 document.getElementById('mainDashboard').style.display = 'block';
 
                 prepareCardData();
-                updateChart(0); 
+                updateChart(0); // 0 means "All Time" preset
             };
             container.appendChild(div);
         });
     }
 
+    // ⚙️ FUNCTION: Data Math. This goes through the selected card's history and calculates how many cards were added each day (the delta)
     function prepareCardData() {
         allCardData = rawData.filter(item => item['Card Details'] === currentCardDetails);
         allCardData.sort((a, b) => new Date(a.Date) - new Date(b.Date));
@@ -511,6 +527,7 @@
         });
     }
 
+    // ⚙️ FUNCTION: Presets (7 Day, 14 Day, etc). Slices the data array to only show the last X days.
     function updateChart(days) {
         if (!currentCardDetails || allCardData.length === 0) return;
         let displayData = [...allCardData];
@@ -523,6 +540,7 @@
         updateSummaryStats();
     }
 
+    // ⚙️ FUNCTION: Handles the "Custom Range" calendar inputs
     function applyCustomDateRange() {
         if (!currentCardDetails || allCardData.length === 0) return;
         let startVal = document.getElementById('startDate').value;
@@ -550,6 +568,7 @@
         updateSummaryStats();
     }
 
+    // ⚙️ FUNCTION: Toggles the middle graph between "Absolute Numbers" and "Period Growth" (starting at zero)
     function toggleGrowthMode() {
         isGrowthMode = !isGrowthMode;
         
@@ -567,10 +586,11 @@
         }
 
         if (currentDisplayData.length > 0) {
-            renderCharts();
+            renderCharts(); // Redraw graphs with new math
         }
     }
 
+    // ⚙️ FUNCTION: Calculates the Gem Rates and Period Additions for the 4 summary cards
     function updateSummaryStats() {
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
@@ -598,6 +618,7 @@
         document.getElementById('statOverallGem').innerText = overallGemRate;
     }
 
+    // ⚙️ FUNCTION: The main engine that draws all three Chart.js graphs
     function renderCharts() {
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
@@ -606,6 +627,7 @@
         let totalPopData = [];
         let psa10Data = [];
 
+        // Math for the toggle button (Growth vs Absolute)
         if (isGrowthMode && dataArray.length > 0) {
             let baselineTotal = parseInt(dataArray[0]['Total Pop']) || 0;
             let baseline10 = parseInt(dataArray[0]['PSA 10 Pop']) || 0;
@@ -619,8 +641,8 @@
         const deltaTotalData = dataArray.map(item => item.deltaTotal);
         const delta10Data = dataArray.map(item => item.delta10);
 
-        // 1. TOP CHART: Grading Speed (Line with Data Labels)
-        if (mySpeedChart) mySpeedChart.destroy();
+        // 1. TOP CHART: Grading Speed
+        if (mySpeedChart) mySpeedChart.destroy(); // Destroy old chart before drawing new one
         mySpeedChart = new Chart(document.getElementById('gradingSpeedChart').getContext('2d'), {
             type: 'line',
             data: {
@@ -629,6 +651,7 @@
                     { 
                         label: 'Total Cards Graded', 
                         data: deltaTotalData, 
+                        /* 🎨 STYLE CHANGE: The color of the Total Pop line on the top chart (Hex #1A365D is dark blue) */
                         borderColor: '#1A365D', 
                         backgroundColor: '#1A365D', 
                         borderWidth: 2, 
@@ -645,6 +668,7 @@
                     { 
                         label: 'PSA 10s Graded', 
                         data: delta10Data, 
+                        /* 🎨 STYLE CHANGE: The color of the PSA 10 line on the top chart (Hex #e53e3e is red) */
                         borderColor: '#e53e3e', 
                         backgroundColor: '#e53e3e', 
                         borderWidth: 2, 
@@ -666,14 +690,14 @@
                 layout: { padding: { top: 25, right: 20, left: 20, bottom: 20 } },
                 plugins: {
                     datalabels: {
-                        // Only show the label if the number is greater than 0
+                        // ⚙️ FUNCTION: Hide the "+0" labels so the chart doesn't look messy
                         display: function(context) { return context.dataset.data[context.dataIndex] > 0; }
                     }
                 }
             }
         });
 
-        // 2. BOTTOM LEFT: Cumulative Population
+        // 2. BOTTOM LEFT CHART: Cumulative Population
         if (myTotalChart) myTotalChart.destroy();
         myTotalChart = new Chart(document.getElementById('totalPopChart').getContext('2d'), {
             type: 'line',
@@ -687,7 +711,7 @@
             options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
         });
 
-        // 3. BOTTOM RIGHT: Daily Change Bar Chart
+        // 3. BOTTOM RIGHT CHART: Daily Change Bar Chart
         if (myDailyChart) myDailyChart.destroy();
         myDailyChart = new Chart(document.getElementById('dailyChangeChart').getContext('2d'), {
             type: 'bar',
@@ -702,10 +726,12 @@
         });
     }
 
+    // ⚙️ FUNCTION: Allows you to export the charts to PNG for your videos
     function exportChart(canvasId, prefix) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
         
+        // ⚙️ FUNCTION: Cleans up the card name so the computer can save it as a valid file name
         let safeCardName = currentCardDetails.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
         let finalPrefix = (canvasId === 'totalPopChart' && isGrowthMode) ? 'Period_Growth' : prefix;
         let fileName = `${finalPrefix}_${safeCardName}.png`;
