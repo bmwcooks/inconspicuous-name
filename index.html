@@ -195,6 +195,52 @@
             margin: 0;
         }
 
+        /* Recent Sales Cards CSS (New Section) */
+        .sales-container {
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .sales-card {
+            background: #ffffff;
+            border-left: 5px solid #48bb78; /* Green for money */
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-top: 1px solid #eaeaea;
+            border-right: 1px solid #eaeaea;
+            border-bottom: 1px solid #eaeaea;
+        }
+        .sales-card h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .sales-card .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2d3748;
+            margin: 0;
+        }
+        .sales-placeholder {
+            color: #718096;
+            font-size: 14px;
+            font-style: italic;
+            padding: 20px 0;
+        }
+        .cert-badge {
+            font-size: 12px;
+            background: #edf2f7;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #4a5568;
+            margin-left: 10px;
+            font-weight: normal;
+        }
+
         /* Chart Elements */
         .graphs-wrapper {
             display: flex;
@@ -377,13 +423,15 @@
                     <canvas id="totalPopChart"></canvas>
                 </div>
             </div>
+            
             <div class="chart-wrapper">
                 <div class="chart-header">
-                    <h3>Daily Population Change (Bar View)</h3>
-                    <button class="export-btn" onclick="exportChart('dailyChangeChart', 'Daily_Change_Bar')">Download PNG</button>
+                    <div class="chart-header-left">
+                        <h3>Recent Sales Data (Card Ladder) <span id="certDisplayBadge" class="cert-badge"></span></h3>
+                    </div>
                 </div>
-                <div class="chart-container">
-                    <canvas id="dailyChangeChart"></canvas>
+                <div class="sales-container" id="recentSalesContainer">
+                    <div class="sales-placeholder">Upload Price Data (CSV) to view recent sales.</div>
                 </div>
             </div>
         </div>
@@ -405,17 +453,49 @@
         }
     });
 
+    // ==========================================
+    // HARDCODED CERT MAP (Card Name -> Cert Number)
+    // ==========================================
+    const certMap = {
+        "2025 POKEMON PRE EN-PRISMATIC EVOLUTIONS #161 UMBREON ex SPECIAL ILLUSTRATION RARE": "107699980",
+        "2026 POKEMON POR EN-PERFECT ORDER #095 ESPURR ILLUSTRATION RARE": "155430323",
+        "2026 POKEMON POR EN-PERFECT ORDER #093 DEDENNE ILLUSTRATION RARE": "156035510",
+        "2025 POKEMON PFL EN-PHANTASMAL FLAMES #125 MEGA CHARIZARD X ex SPECIAL ILLUSTRATION RARE": "157064279",
+        "2025 POKEMON PFL EN-PHANTASMAL FLAMES #106 MEOWTH ILLUSTRATION RARE": "148311561",
+        "2026 ONE PIECE OP14-EB04-THE AZURE SEA'S SEVEN #006 RORONOA ZORO SPECIAL ALTERNATE ART": "152560693",
+        "2025 POKEMON JAPANESE M-P PROMO #020 PIKACHU McDONALD'S": "133892820",
+        "2025 POKEMON MEG EN-MEGA EVOLUTION #133 BULBASAUR ENHANCED BSTR BOX TOPPER": "141580766",
+        "2025 POKEMON MEP EN-ME BLACK STAR PROMO #027 HAUNTER MEGA GENGAR ex MEGA BD": "146930386",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #037 BULBASAUR FIRST PARTNER ILLUS COLL SER 1": "155792273",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #038 CHARMANDER FIRST PARTNER ILLUS COLL SER 1": "155792274",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #039 SQUIRTLE FIRST PARTNER ILLUS COLL SER 1": "155792275",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #040 TURTWIG FIRST PARTNER ILLUS COLL SER 1": "155792276",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #041 CHIMCHAR FIRST PARTNER ILLUS COLL SER 1": "155792277",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #042 PIPLUP FIRST PARTNER ILLUS COLL SER 1": "155792278",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #043 ROWLET FIRST PARTNER ILLUS COLL SER 1": "155792279",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #044 LITTEN FIRST PARTNER ILLUS COLL SER 1": "155792280",
+        "2026 POKEMON MEP EN-ME BLACK STAR PROMO #045 POPPLIO FIRST PARTNER ILLUS COLL SER 1": "155792281",
+        "2025 POKEMON DRI EN-DESTINED RIVALS #231 ROCKET'S MEWTWO ex SPECIAL ILLUSTRATION RARE": "119851354",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #218 ERIKA'S TANGELA ILLUSTRATION RARE": "152956199",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #226 PSYDUCK ILLUSTRATION RARE": "157617861",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #238 TEAM ROCKET'S MIMIKYU ILLUSTRATION RARE": "156906355",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #276 PIKACHU ex SPECIAL ILLUSTRATION RARE": "157429557",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #277 PIKACHU ex SPECIAL ILLUSTRATION RARE": "152642825", 
+        "2026 POKEMON ASC EN-ASCENDED HEROES #281 ROCKET'S MEWTWO ex SPECIAL ILLUSTRATION RARE": "157044224",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #284 MEGA GENGAR ex SPECIAL ILLUSTRATION RARE": "158904150",
+        "2026 POKEMON ASC EN-ASCENDED HEROES #290 MEGA DRAGONITE ex SPECIAL ILLUSTRATION RARE": "156914085"
+    };
+
     // Core Data Variables
     let rawData = [];
-    let priceData = []; // NEW: Array to hold parsed price data for future integration
-    let dataHierarchy = {}; // Format: { '2026': { 'Pokémon': { 'Set Name': Set('Card1') } } }
+    let priceData = []; 
+    let dataHierarchy = {}; 
     let allCardData = []; 
     let currentDisplayData = []; 
     
     // Chart Variables
     let mySpeedChart = null;
     let myTotalChart = null;
-    let myDailyChart = null;
     
     // State Variables
     let currentCardDetails = "";
@@ -436,22 +516,23 @@
         });
     });
 
-    // File 2: Price Data Parser (Stores for later)
+    // File 2: Price Data Parser
     document.getElementById('priceFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
 
+        // Since the Apps Script spits out raw rows without headers, header is false
         Papa.parse(file, {
-            header: true,
+            header: false,
             skipEmptyLines: true,
             complete: function(results) {
                 priceData = results.data;
                 console.log("Price data loaded successfully! Rows:", priceData.length);
+                if (currentCardDetails) updateRecentSales();
             }
         });
     });
 
-    // NEW: 4-Tier Hierarchy Engine (Year -> Game -> Set -> Card)
     function processHierarchy() {
         dataHierarchy = {};
         
@@ -481,11 +562,9 @@
             const setMatch = yearMatch ? cardName.match(/^\d{4}\s+(.*?)(?=\s\d{1,4}\s)/) : cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
             if (setMatch) {
                 set = setMatch[1];
-                // Clean up Set Name (removes redundant 'POKEMON' or 'ONE PIECE' from the set tab)
                 set = set.replace(/POKEMON /i, '').replace(/ONE PIECE /i, '').trim();
             }
 
-            // Build the nested structure
             if (!dataHierarchy[year]) dataHierarchy[year] = {};
             if (!dataHierarchy[year][game]) dataHierarchy[year][game] = {};
             if (!dataHierarchy[year][game][set]) dataHierarchy[year][game][set] = new Set();
@@ -496,7 +575,6 @@
         renderYearTabs();
     }
 
-    // Tier 1: Render Years
     function renderYearTabs() {
         const container = document.getElementById('yearTabs');
         container.innerHTML = '';
@@ -511,7 +589,6 @@
                 btn.classList.add('active');
                 renderGameTabs(year);
                 
-                // Clear downstream selections
                 document.getElementById('setTabs').innerHTML = '<span style="font-size: 13px; color: #718096;">Select a game first...</span>';
                 document.getElementById('cardList').style.display = 'none';
             };
@@ -519,7 +596,6 @@
         });
     }
 
-    // Tier 2: Render Games (Pokémon / One Piece)
     function renderGameTabs(selectedYear) {
         const container = document.getElementById('gameTabs');
         container.innerHTML = '';
@@ -540,7 +616,6 @@
         });
     }
 
-    // Tier 3: Render Sets
     function renderSetTabs(year, game) {
         const container = document.getElementById('setTabs');
         container.innerHTML = '';
@@ -559,7 +634,6 @@
         });
     }
 
-    // Tier 4: Render Cards
     function renderCardList(year, game, set) {
         const container = document.getElementById('cardList');
         container.innerHTML = '';
@@ -585,7 +659,6 @@
         });
     }
 
-    // Math Engine
     function prepareCardData() {
         allCardData = rawData.filter(item => item['Card Details'] === currentCardDetails);
         allCardData.sort((a, b) => new Date(a.Date) - new Date(b.Date));
@@ -606,7 +679,6 @@
         });
     }
 
-    // Update Presets
     function updateChart(days) {
         if (!currentCardDetails || allCardData.length === 0) return;
         let displayData = [...allCardData];
@@ -617,9 +689,9 @@
         
         renderCharts();
         updateSummaryStats();
+        updateRecentSales(); // NEW: Refresh the sales cards
     }
 
-    // Custom Calendar Dates
     function applyCustomDateRange() {
         if (!currentCardDetails || allCardData.length === 0) return;
         let startVal = document.getElementById('startDate').value;
@@ -645,9 +717,9 @@
         currentDisplayData = displayData;
         renderCharts();
         updateSummaryStats();
+        updateRecentSales(); 
     }
 
-    // Toggle Mode
     function toggleGrowthMode() {
         isGrowthMode = !isGrowthMode;
         
@@ -669,7 +741,6 @@
         }
     }
 
-    // Summary Cards
     function updateSummaryStats() {
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
@@ -697,7 +768,69 @@
         document.getElementById('statOverallGem').innerText = overallGemRate;
     }
 
-    // Chart Engine
+    // ==========================================
+    // NEW: Render the Card Ladder Price Cards
+    // ==========================================
+    function updateRecentSales() {
+        const container = document.getElementById('recentSalesContainer');
+        const badge = document.getElementById('certDisplayBadge');
+        container.innerHTML = ''; 
+        badge.innerText = '';
+
+        if (!priceData || priceData.length === 0) {
+            container.innerHTML = '<div class="sales-placeholder">Upload Price Data (CSV) to view recent sales.</div>';
+            return;
+        }
+
+        const certNumber = certMap[currentCardDetails];
+        
+        if (!certNumber) {
+            container.innerHTML = '<div class="sales-placeholder">No Cert Number mapped for this card yet.</div>';
+            return;
+        }
+
+        badge.innerText = `Cert #${certNumber}`;
+
+        // Find all records for this cert, and grab the most recently logged one
+        let matchingRows = priceData.filter(row => row[1] === certNumber);
+        
+        if (matchingRows.length === 0) {
+            container.innerHTML = `<div class="sales-placeholder">No sales data found in the CSV for Cert #${certNumber}.</div>`;
+            return;
+        }
+
+        let latestRow = matchingRows[matchingRows.length - 1];
+        let pairs = [];
+
+        // The CSV structure from the Apps Script is: 
+        // [0]RunDate, [1]Cert, [2]Date1, [3]Price1, [4]Date2, [5]Price2...
+        for(let i = 2; i < latestRow.length; i += 2) {
+            let date = latestRow[i];
+            let price = latestRow[i+1];
+            
+            // Only add valid pairs that have a dollar sign price
+            if (date && price && price.includes('$')) {
+                pairs.push({ date: date, price: price });
+            }
+        }
+
+        if (pairs.length === 0) {
+            container.innerHTML = `<div class="sales-placeholder">No recent sales listed for Cert #${certNumber}.</div>`;
+            return;
+        }
+
+        // Draw the cards
+        pairs.forEach(pair => {
+            const card = document.createElement('div');
+            card.className = 'sales-card';
+            card.innerHTML = `
+                <h4>${pair.date}</h4>
+                <p class="value">${pair.price}</p>
+            `;
+            container.appendChild(card);
+        });
+    }
+
     function renderCharts() {
         const dataArray = currentDisplayData;
         if (dataArray.length === 0) return;
@@ -779,19 +912,6 @@
                 datasets: [
                     { label: 'Total Pop', data: totalPopData, borderColor: '#1A365D', backgroundColor: 'rgba(26, 54, 93, 0.1)', borderWidth: 2, fill: true, tension: 0.1, datalabels: { display: false } },
                     { label: 'PSA 10 Pop', data: psa10Data, borderColor: '#e53e3e', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: 0.1, datalabels: { display: false } }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
-        });
-
-        if (myDailyChart) myDailyChart.destroy();
-        myDailyChart = new Chart(document.getElementById('dailyChangeChart').getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    { label: 'New Total Pop Added', data: deltaTotalData, backgroundColor: 'rgba(26, 54, 93, 0.7)', datalabels: { display: false } },
-                    { label: 'New PSA 10s Added', data: delta10Data, backgroundColor: 'rgba(229, 62, 62, 0.8)', datalabels: { display: false } }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
