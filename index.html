@@ -423,7 +423,10 @@
             <div class="chart-wrapper">
                 <div class="chart-header">
                     <div class="chart-header-left">
-                        <h3>Recent Sales Data (Card Ladder) <span id="certDisplayBadge" class="cert-badge"></span></h3>
+                        <h3>Recent Sales Data (Card Ladder) 
+                            <span id="certDisplayBadge" class="cert-badge"></span>
+                            <span id="confidenceBadge" class="cert-badge" style="display: none; background: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4;"></span>
+                        </h3>
                     </div>
                 </div>
                 <div class="sales-container" id="recentSalesContainer">
@@ -449,9 +452,6 @@
         }
     });
 
-    // ==========================================
-    // HARDCODED CERT MAP (Card Name -> Cert Number)
-    // ==========================================
     const certMap = {
         "2025 POKEMON PRE EN-PRISMATIC EVOLUTIONS 161 UMBREON EX SPECIAL ILLUSTRATION RARE": "107699980",
         "2026 POKEMON POR EN-PERFECT ORDER 095 ESPURR ILLUSTRATION RARE": "155430323",
@@ -740,22 +740,25 @@
         document.getElementById('statOverallGem').innerText = overallGemRate;
     }
 
+    // ==========================================
+    // UPDATED: Daily Average Aggregation Engine
+    // ==========================================
     function updateRecentSales() {
         const container = document.getElementById('recentSalesContainer');
         const badge = document.getElementById('certDisplayBadge');
+        const confBadge = document.getElementById('confidenceBadge');
+        
         container.innerHTML = ''; 
         badge.innerText = '';
+        confBadge.style.display = 'none';
 
         if (!priceData || priceData.length === 0) {
             container.innerHTML = '<div class="sales-placeholder">Upload Price Data (CSV) to view recent sales.</div>';
             return;
         }
 
-        // --- THE UPGRADED FUZZY MATCHER & DEBUGGER ---
-        // 1. Clean the selected card name (remove double spaces, trim edges, uppercase)
         const normalizedSelectedCard = currentCardDetails.trim().replace(/\s+/g, ' ').toUpperCase();
         
-        // 2. Loop through the dictionary and clean those names too before comparing
         let certNumber = null;
         for (let key in certMap) {
             let normalizedKey = key.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -765,7 +768,6 @@
             }
         }
         
-        // 3. If it STILL fails, trigger the red debug box
         if (!certNumber) {
             container.innerHTML = `
                 <div class="sales-placeholder" style="color: #e53e3e; text-align: left; background: #fff5f5; padding: 15px; border-radius: 6px; border: 1px solid #feb2b2;">
@@ -790,32 +792,79 @@
             return;
         }
 
+        // 1. Calculate Confidence Level from the most recent run
         let latestRow = matchingRows[matchingRows.length - 1];
-        let pairs = [];
-
-        for(let i = 2; i < latestRow.length && pairs.length < 5; i += 2) {
+        let latestSalesCount = 0;
+        for(let i = 2; i < latestRow.length; i += 2) {
             let date = latestRow[i] ? latestRow[i].toString().trim() : "";
-            let price = latestRow[i+1] ? latestRow[i+1].toString().trim() : "";
-            
-            if (date !== "" && price !== "") {
-                pairs.push({ date: date, price: price });
+            let priceStr = latestRow[i+1] ? latestRow[i+1].toString().trim() : "";
+            if (date !== "" && priceStr !== "") {
+                latestSalesCount++;
             }
         }
+        let confidence = Math.min(5, latestSalesCount);
 
-        if (pairs.length === 0) {
+        // 2. Parse all historical sales & Deduplicate
+        let uniqueSalesMap = new Set();
+        let allSales = [];
+
+        matchingRows.forEach(row => {
+            for(let i = 2; i < row.length; i += 2) {
+                let date = row[i] ? row[i].toString().trim() : "";
+                let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
+                
+                if (date !== "" && priceStr !== "" && priceStr.includes('$')) {
+                    // Strip the dollar sign and commas to get a pure number
+                    let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
+                    
+                    // Deduplicate by identical Date + Price
+                    let uniqueKey = date + "||" + priceVal;
+                    if (!uniqueSalesMap.has(uniqueKey)) {
+                        uniqueSalesMap.add(uniqueKey);
+                        allSales.push({ date: date, price: priceVal });
+                    }
+                }
+            }
+        });
+
+        if (allSales.length === 0) {
             container.innerHTML = `<div class="sales-placeholder">No recent sales listed for Cert #${certNumber}.</div>`;
             return;
         }
 
-        pairs.forEach(pair => {
+        // 3. Group by Date to calculate Daily Averages
+        let groupedSales = {};
+        allSales.forEach(sale => {
+            if (!groupedSales[sale.date]) groupedSales[sale.date] = [];
+            groupedSales[sale.date].push(sale.price);
+        });
+
+        // 4. Sort dates (Newest First) and grab the top 5
+        let sortedDates = Object.keys(groupedSales).sort((a,b) => new Date(b) - new Date(a));
+        let top5Dates = sortedDates.slice(0, 5);
+
+        // 5. Render the Daily Average Cards
+        top5Dates.forEach(date => {
+            let pricesForDay = groupedSales[date];
+            let sum = pricesForDay.reduce((a, b) => a + b, 0);
+            let avg = sum / pricesForDay.length;
+            
+            // Format back to elegant currency string
+            let formattedAvg = avg.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
             const card = document.createElement('div');
             card.className = 'sales-card';
             card.innerHTML = `
-                <h4>${pair.date}</h4>
-                <p class="value">${pair.price}</p>
+                <h4>${date}</h4>
+                <p class="value">${formattedAvg}</p>
+                <p style="font-size: 10px; color: #a0aec0; margin: 5px 0 0 0; text-transform: uppercase;">Daily Avg (${pricesForDay.length} Sale${pricesForDay.length > 1 ? 's' : ''})</p>
             `;
             container.appendChild(card);
         });
+
+        // Show Confidence Badge
+        confBadge.innerText = `Confidence: ${confidence}/5`;
+        confBadge.style.display = 'inline-block';
     }
 
     function renderCharts() {
