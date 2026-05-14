@@ -195,7 +195,7 @@
             margin: 0;
         }
 
-        /* Recent Sales Cards CSS (New Section) */
+        /* Recent Sales Cards CSS */
         .sales-container {
             display: grid; 
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -204,7 +204,7 @@
         }
         .sales-card {
             background: #ffffff;
-            border-left: 5px solid #48bb78; /* Green for money */
+            border-left: 5px solid #48bb78; 
             padding: 15px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
@@ -318,7 +318,6 @@
     <p id="warning">CLIENT-SIDE ONLY. DO NOT UPLOAD CSV FILES TO GITHUB.</p>
 
     <div class="controls">
-        
         <div class="control-group">
             <label><strong>1. Load Files:</strong></label>
             <div class="file-upload-container">
@@ -340,21 +339,18 @@
                     <span style="font-size: 13px; color: #718096;">Upload Population CSV first...</span>
                 </div>
             </div>
-            
             <div>
                 <span class="nav-label">2b. Select Game:</span>
                 <div id="gameTabs" class="tab-container">
                     <span style="font-size: 13px; color: #718096;">Select a year first...</span>
                 </div>
             </div>
-
             <div>
                 <span class="nav-label">2c. Select Set:</span>
                 <div id="setTabs" class="tab-container">
                     <span style="font-size: 13px; color: #718096;">Select a game first...</span>
                 </div>
             </div>
-
             <div>
                 <span class="nav-label">2d. Select Card:</span>
                 <div id="cardList" class="card-list-container"></div>
@@ -453,9 +449,6 @@
         }
     });
 
-    // ==========================================
-    // HARDCODED CERT MAP (Card Name -> Cert Number)
-    // ==========================================
     const certMap = {
         "2025 POKEMON PRE EN-PRISMATIC EVOLUTIONS #161 UMBREON ex SPECIAL ILLUSTRATION RARE": "107699980",
         "2026 POKEMON POR EN-PERFECT ORDER #095 ESPURR ILLUSTRATION RARE": "155430323",
@@ -486,22 +479,16 @@
         "2026 POKEMON ASC EN-ASCENDED HEROES #290 MEGA DRAGONITE ex SPECIAL ILLUSTRATION RARE": "156914085"
     };
 
-    // Core Data Variables
     let rawData = [];
     let priceData = []; 
     let dataHierarchy = {}; 
     let allCardData = []; 
     let currentDisplayData = []; 
-    
-    // Chart Variables
     let mySpeedChart = null;
     let myTotalChart = null;
-    
-    // State Variables
     let currentCardDetails = "";
     let isGrowthMode = false; 
 
-    // File 1: Population Data Parser
     document.getElementById('popFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -516,7 +503,6 @@
         });
     });
 
-    // File 2: Price Data Parser
     document.getElementById('priceFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -526,7 +512,6 @@
             skipEmptyLines: true,
             complete: function(results) {
                 priceData = results.data;
-                console.log("Price data loaded successfully! Rows:", priceData.length);
                 if (currentCardDetails) updateRecentSales();
             }
         });
@@ -543,25 +528,16 @@
             let game = "Other";
             let set = "Other Sets";
 
-            // Extract Year
             const yearMatch = cardName.match(/^(\d{4})\s/);
-            if (yearMatch) {
-                year = yearMatch[1];
-            }
+            if (yearMatch) year = yearMatch[1];
 
-            // Extract Game
             const upperName = cardName.toUpperCase();
-            if (upperName.includes("POKEMON")) {
-                game = "Pokémon";
-            } else if (upperName.includes("ONE PIECE")) {
-                game = "One Piece";
-            }
+            if (upperName.includes("POKEMON")) game = "Pokémon";
+            else if (upperName.includes("ONE PIECE")) game = "One Piece";
 
-            // Extract Set 
             const setMatch = yearMatch ? cardName.match(/^\d{4}\s+(.*?)(?=\s\d{1,4}\s)/) : cardName.match(/^(.*?)(?=\s\d{1,4}\s)/);
             if (setMatch) {
-                set = setMatch[1];
-                set = set.replace(/POKEMON /i, '').replace(/ONE PIECE /i, '').trim();
+                set = setMatch[1].replace(/POKEMON /i, '').replace(/ONE PIECE /i, '').trim();
             }
 
             if (!dataHierarchy[year]) dataHierarchy[year] = {};
@@ -587,7 +563,6 @@
                 document.querySelectorAll('#yearTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 renderGameTabs(year);
-                
                 document.getElementById('setTabs').innerHTML = '<span style="font-size: 13px; color: #718096;">Select a game first...</span>';
                 document.getElementById('cardList').style.display = 'none';
             };
@@ -608,7 +583,6 @@
                 document.querySelectorAll('#gameTabs .nav-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 renderSetTabs(selectedYear, game);
-                
                 document.getElementById('cardList').style.display = 'none';
             };
             container.appendChild(btn);
@@ -721,7 +695,6 @@
 
     function toggleGrowthMode() {
         isGrowthMode = !isGrowthMode;
-        
         const btn = document.getElementById('modeToggleBtn');
         const title = document.getElementById('totalChartTitle');
 
@@ -734,10 +707,7 @@
             btn.style.backgroundColor = "#edf2f7";
             title.innerText = "Cumulative Total Population";
         }
-
-        if (currentDisplayData.length > 0) {
-            renderCharts(); 
-        }
+        if (currentDisplayData.length > 0) renderCharts(); 
     }
 
     function updateSummaryStats() {
@@ -767,9 +737,6 @@
         document.getElementById('statOverallGem').innerText = overallGemRate;
     }
 
-    // ==========================================
-    // UPDATED: Safe Parsing for Card Ladder Price Cards
-    // ==========================================
     function updateRecentSales() {
         const container = document.getElementById('recentSalesContainer');
         const badge = document.getElementById('certDisplayBadge');
@@ -781,16 +748,35 @@
             return;
         }
 
-        const certNumber = certMap[currentCardDetails];
+        // --- THE UPGRADED FUZZY MATCHER & DEBUGGER ---
+        // 1. Clean the selected card name (remove double spaces, trim edges, uppercase)
+        const normalizedSelectedCard = currentCardDetails.trim().replace(/\s+/g, ' ').toUpperCase();
         
+        // 2. Loop through the dictionary and clean those names too before comparing
+        let certNumber = null;
+        for (let key in certMap) {
+            let normalizedKey = key.trim().replace(/\s+/g, ' ').toUpperCase();
+            if (normalizedKey === normalizedSelectedCard) {
+                certNumber = certMap[key];
+                break;
+            }
+        }
+        
+        // 3. If it STILL fails, trigger the red debug box
         if (!certNumber) {
-            container.innerHTML = '<div class="sales-placeholder">No Cert Number mapped for this card yet.</div>';
+            container.innerHTML = `
+                <div class="sales-placeholder" style="color: #e53e3e; text-align: left; background: #fff5f5; padding: 15px; border-radius: 6px; border: 1px solid #feb2b2;">
+                    <strong style="color: #c53030;">Debug Error: String Mismatch</strong><br><br>
+                    The website is trying to look up this exact text from your CSV:<br>
+                    <code style="background:#edf2f7; padding:4px 8px; display:inline-block; margin:8px 0; color: #1a202c; font-weight: bold;">"${currentCardDetails}"</code><br>
+                    But it couldn't find an exact match in the hardcoded list! Please check the code for missing words or typos.
+                </div>
+            `;
             return;
         }
 
         badge.innerText = `Cert #${certNumber}`;
 
-        // FIX 1: Safely convert both values to strings and trim whitespace before comparing
         let matchingRows = priceData.filter(row => {
             if (!row || row.length < 2) return false;
             return row[1].toString().trim() === certNumber.toString().trim();
@@ -804,12 +790,10 @@
         let latestRow = matchingRows[matchingRows.length - 1];
         let pairs = [];
 
-        // FIX 2: Loop safely and stop explicitly at 5 sales
         for(let i = 2; i < latestRow.length && pairs.length < 5; i += 2) {
             let date = latestRow[i] ? latestRow[i].toString().trim() : "";
             let price = latestRow[i+1] ? latestRow[i+1].toString().trim() : "";
             
-            // FIX 3: Ignore empty cells (those consecutive commas in the CSV)
             if (date !== "" && price !== "") {
                 pairs.push({ date: date, price: price });
             }
@@ -820,7 +804,6 @@
             return;
         }
 
-        // Draw the cards
         pairs.forEach(pair => {
             const card = document.createElement('div');
             card.className = 'sales-card';
