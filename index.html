@@ -521,7 +521,6 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        // Since the Apps Script spits out raw rows without headers, header is false
         Papa.parse(file, {
             header: false,
             skipEmptyLines: true,
@@ -689,7 +688,7 @@
         
         renderCharts();
         updateSummaryStats();
-        updateRecentSales(); // NEW: Refresh the sales cards
+        updateRecentSales(); 
     }
 
     function applyCustomDateRange() {
@@ -769,7 +768,7 @@
     }
 
     // ==========================================
-    // NEW: Render the Card Ladder Price Cards
+    // UPDATED: Safe Parsing for Card Ladder Price Cards
     // ==========================================
     function updateRecentSales() {
         const container = document.getElementById('recentSalesContainer');
@@ -791,8 +790,11 @@
 
         badge.innerText = `Cert #${certNumber}`;
 
-        // Find all records for this cert, and grab the most recently logged one
-        let matchingRows = priceData.filter(row => row[1] === certNumber);
+        // FIX 1: Safely convert both values to strings and trim whitespace before comparing
+        let matchingRows = priceData.filter(row => {
+            if (!row || row.length < 2) return false;
+            return row[1].toString().trim() === certNumber.toString().trim();
+        });
         
         if (matchingRows.length === 0) {
             container.innerHTML = `<div class="sales-placeholder">No sales data found in the CSV for Cert #${certNumber}.</div>`;
@@ -802,14 +804,13 @@
         let latestRow = matchingRows[matchingRows.length - 1];
         let pairs = [];
 
-        // The CSV structure from the Apps Script is: 
-        // [0]RunDate, [1]Cert, [2]Date1, [3]Price1, [4]Date2, [5]Price2...
-        for(let i = 2; i < latestRow.length; i += 2) {
-            let date = latestRow[i];
-            let price = latestRow[i+1];
+        // FIX 2: Loop safely and stop explicitly at 5 sales
+        for(let i = 2; i < latestRow.length && pairs.length < 5; i += 2) {
+            let date = latestRow[i] ? latestRow[i].toString().trim() : "";
+            let price = latestRow[i+1] ? latestRow[i+1].toString().trim() : "";
             
-            // Only add valid pairs that have a dollar sign price
-            if (date && price && price.includes('$')) {
+            // FIX 3: Ignore empty cells (those consecutive commas in the CSV)
+            if (date !== "" && price !== "") {
                 pairs.push({ date: date, price: price });
             }
         }
