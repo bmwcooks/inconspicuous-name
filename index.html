@@ -423,7 +423,7 @@
             <div class="chart-wrapper">
                 <div class="chart-header">
                     <div class="chart-header-left">
-                        <h3>Recent Sales Data (Card Ladder) 
+                        <h3>Market Average Data (Daily Pull) 
                             <span id="certDisplayBadge" class="cert-badge"></span>
                             <span id="confidenceBadge" class="cert-badge" style="display: none; background: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4;"></span>
                         </h3>
@@ -741,7 +741,7 @@
     }
 
     // ==========================================
-    // UPDATED: Daily Average Aggregation Engine
+    // UPDATED: Daily Average Aggregation Engine (By Pull Date)
     // ==========================================
     function updateRecentSales() {
         const container = document.getElementById('recentSalesContainer');
@@ -796,60 +796,55 @@
         let latestRow = matchingRows[matchingRows.length - 1];
         let latestSalesCount = 0;
         for(let i = 2; i < latestRow.length; i += 2) {
-            let date = latestRow[i] ? latestRow[i].toString().trim() : "";
             let priceStr = latestRow[i+1] ? latestRow[i+1].toString().trim() : "";
-            if (date !== "" && priceStr !== "") {
+            if (priceStr !== "" && priceStr.includes('$')) {
                 latestSalesCount++;
             }
         }
         let confidence = Math.min(5, latestSalesCount);
 
-        // 2. Parse all historical sales & Deduplicate
-        let uniqueSalesMap = new Set();
-        let allSales = [];
+        // 2. Group by Pull Date (Column 0 in the CSV)
+        let groupedByPullDate = {};
 
         matchingRows.forEach(row => {
+            let pullDate = row[0] ? row[0].toString().trim() : "";
+            if (!pullDate) return;
+
+            let pricesForThisRun = [];
+
+            // Loop through the prices in this specific row (Indices 3, 5, 7, 9, 11)
             for(let i = 2; i < row.length; i += 2) {
-                let date = row[i] ? row[i].toString().trim() : "";
                 let priceStr = row[i+1] ? row[i+1].toString().trim() : "";
-                
-                if (date !== "" && priceStr !== "" && priceStr.includes('$')) {
-                    // Strip the dollar sign and commas to get a pure number
+                if (priceStr !== "" && priceStr.includes('$')) {
+                    // Clean string into a math-ready float
                     let priceVal = parseFloat(priceStr.replace(/[^0-9.-]+/g,""));
-                    
-                    // Deduplicate by identical Date + Price
-                    let uniqueKey = date + "||" + priceVal;
-                    if (!uniqueSalesMap.has(uniqueKey)) {
-                        uniqueSalesMap.add(uniqueKey);
-                        allSales.push({ date: date, price: priceVal });
-                    }
+                    pricesForThisRun.push(priceVal);
                 }
+            }
+
+            if (pricesForThisRun.length > 0) {
+                // By doing this, if there are multiple runs on the exact same date in the CSV,
+                // it simply overwrites with the freshest, latest run of that day.
+                groupedByPullDate[pullDate] = pricesForThisRun;
             }
         });
 
-        if (allSales.length === 0) {
-            container.innerHTML = `<div class="sales-placeholder">No recent sales listed for Cert #${certNumber}.</div>`;
+        let availablePullDates = Object.keys(groupedByPullDate);
+        if (availablePullDates.length === 0) {
+            container.innerHTML = `<div class="sales-placeholder">No valid price data found for Cert #${certNumber}.</div>`;
             return;
         }
 
-        // 3. Group by Date to calculate Daily Averages
-        let groupedSales = {};
-        allSales.forEach(sale => {
-            if (!groupedSales[sale.date]) groupedSales[sale.date] = [];
-            groupedSales[sale.date].push(sale.price);
-        });
-
-        // 4. Sort dates (Newest First) and grab the top 5
-        let sortedDates = Object.keys(groupedSales).sort((a,b) => new Date(b) - new Date(a));
+        // 3. Sort pull dates (Newest First) and grab the top 5
+        let sortedDates = availablePullDates.sort((a,b) => new Date(b) - new Date(a));
         let top5Dates = sortedDates.slice(0, 5);
 
-        // 5. Render the Daily Average Cards
+        // 4. Render the Daily Average Cards
         top5Dates.forEach(date => {
-            let pricesForDay = groupedSales[date];
+            let pricesForDay = groupedByPullDate[date];
             let sum = pricesForDay.reduce((a, b) => a + b, 0);
             let avg = sum / pricesForDay.length;
             
-            // Format back to elegant currency string
             let formattedAvg = avg.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
             const card = document.createElement('div');
@@ -857,7 +852,7 @@
             card.innerHTML = `
                 <h4>${date}</h4>
                 <p class="value">${formattedAvg}</p>
-                <p style="font-size: 10px; color: #a0aec0; margin: 5px 0 0 0; text-transform: uppercase;">Daily Avg (${pricesForDay.length} Sale${pricesForDay.length > 1 ? 's' : ''})</p>
+                <p style="font-size: 10px; color: #a0aec0; margin: 5px 0 0 0; text-transform: uppercase;">Run Avg (${pricesForDay.length} Sale${pricesForDay.length > 1 ? 's' : ''})</p>
             `;
             container.appendChild(card);
         });
